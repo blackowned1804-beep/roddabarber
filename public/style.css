@@ -41,6 +41,9 @@ body {
 .brand.brand-row .brand-meta { text-align: left; }
 .brand.brand-row .kicker { font-size: 12px; letter-spacing: 2.5px; color: var(--gold); font-weight: 800; }
 
+.beta-note { background: var(--card); border: 1px solid var(--line); border-radius: 12px; padding: 9px 13px; margin-bottom: 14px; text-align: center; color: var(--muted); font-size: 12.5px; line-height: 1.4; }
+.beta-note b { color: var(--gold); }
+
 .card { background: var(--card); border: 1px solid var(--line); border-radius: var(--radius); padding: 18px; margin-bottom: 14px; box-shadow: var(--shadow); }
 .card h2 { margin: 0 0 12px; font-size: 16px; }
 

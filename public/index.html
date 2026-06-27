@@ -113,6 +113,11 @@ $('kindSeg').querySelectorAll('button').forEach(b => b.onclick = () => {
 $('apptYes').onclick = () => { $('apptModal').classList.remove('show'); selectKind('appt'); };
 $('apptNo').onclick  = () => { $('apptModal').classList.remove('show'); selectKind('walkin'); toast('No problem — choose Walk-in to join the line.', 'warn'); };
 
+// Clear any lingering error toast the moment they fix the field it was about.
+function clearToasts() { document.querySelectorAll('#toasts .toast').forEach(t => t.remove()); }
+$('apptTime').addEventListener('input', clearToasts);
+$('name').addEventListener('input', clearToasts);
+
 $('submit').onclick = async () => {
   const name = $('name').value.trim();
   const phone = $('phone').value.trim();

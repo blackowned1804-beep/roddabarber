@@ -1,4 +1,4 @@
-# Charrod the Barber — Queue (Phase 1)
+# Rod da Barber — Queue (Phase 1)
 
 A walk-in + appointment queue. Clients scan a QR code, join the line, and get a
 **live link** that shows their spot and updates by itself. No texting/SMS yet

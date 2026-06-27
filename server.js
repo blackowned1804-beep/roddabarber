@@ -1,5 +1,5 @@
 /*
- * Charrod the Barber — queue server (Phase 1: live link, no SMS)
+ * Rod da Barber — queue server (Phase 1: live link, no SMS)
  *
  * One small Express app with three doors:
  *   /          client join form (the QR code points here)
@@ -207,7 +207,7 @@ app.post('/api/join', (req, res) => {
   const { name, phone, partySize, service, kind, apptTime } = req.body || {};
 
   if (!db.state.open) {
-    return res.status(403).json({ error: 'closed', message: 'Charrod is not taking new clients right now. Please check back soon!' });
+    return res.status(403).json({ error: 'closed', message: 'Rod is not taking new clients right now. Please check back soon!' });
   }
   if (!name || !String(name).trim()) return res.status(400).json({ error: 'name required' });
   if (!phone || !String(phone).trim()) return res.status(400).json({ error: 'phone required' });
@@ -499,6 +499,6 @@ app.get('/barber', (_req, res) => res.sendFile(path.join(__dirname, 'public', 'b
 app.get('/qr', (_req, res) => res.sendFile(path.join(__dirname, 'public', 'qr.html')));
 
 app.listen(PORT, () => {
-  console.log(`Charrod the Barber queue running on http://localhost:${PORT}`);
+  console.log(`Rod da Barber queue running on http://localhost:${PORT}`);
   console.log(`Barber PIN: ${BARBER_PIN}`);
 });

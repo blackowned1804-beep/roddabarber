@@ -1,6 +1,6 @@
 services:
   - type: web
-    name: charrod-queue
+    name: roddabarber
     runtime: node
     plan: free
     buildCommand: npm install

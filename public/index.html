@@ -68,7 +68,6 @@
     <div class="big-num" id="aheadNum">0</div>
     <p class="muted">people ahead of you<br><span class="small" id="asOf"></span></p>
     <img class="motiv" id="posImg" alt="A little motivation for your day" />
-    <div class="msg healthy" id="healthMsg"></div>
     <a class="btn" id="statusLink" href="#">See my live spot →</a>
     <p class="small muted" style="margin-top:12px">Bookmark that link — it updates as people finish.</p>
   </div>
@@ -109,7 +108,6 @@ $('submit').onclick = async () => {
     $('aheadNum').textContent = data.ahead;
     $('asOf').textContent = 'as of ' + data.nowLabel + ' ET';
     $('posImg').src = data.positiveImg;
-    $('healthMsg').textContent = data.healthy;
     $('statusLink').href = '/status?id=' + data.id;
     localStorage.setItem('charrod_id', data.id);
   } catch (e) {

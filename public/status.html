@@ -30,7 +30,6 @@
       <p class="muted small" id="asOf"></p>
       <div id="info" class="small muted" style="margin:8px 0"></div>
       <img class="motiv" id="posImg" alt="A little motivation for your day" />
-      <div class="msg healthy" id="healthMsg"></div>
       <button class="btn danger" id="cancelBtn">Cancel my spot</button>
     </div>
 
@@ -80,7 +79,6 @@ async function refresh() {
     const e = d.entry;
     $('info').textContent = `${e.serviceLabel} · party of ${e.partySize}` + (e.kind === 'appt' ? ` · appt ${e.apptLabel}` : ' · walk-in');
     $('posImg').src = d.positiveImg;
-    $('healthMsg').textContent = d.healthy;
 
     if (lastAhead !== null && d.ahead < lastAhead) {
       toast('You moved up! ' + d.ahead + ' ahead now 🎉', 'good');

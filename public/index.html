@@ -66,13 +66,24 @@
 
   <!-- CONFIRMATION -->
   <div id="doneCard" class="card center" style="display:none">
-    <h2>You're in line! 🎉</h2>
-    <p class="muted">There are</p>
-    <div class="big-num" id="aheadNum">0</div>
-    <p class="muted">people ahead of you<br><span class="small" id="asOf"></span></p>
+    <!-- Walk-in variant -->
+    <div id="doneWalk">
+      <h2>You're in line! 🎉</h2>
+      <p class="muted">There are</p>
+      <div class="big-num" id="aheadNum">0</div>
+      <p class="muted">walk-ins ahead of you<br><span class="small" id="asOf"></span></p>
+      <div id="apptsAheadBox" class="msg" style="display:none;text-align:left"></div>
+    </div>
+    <!-- Appointment variant -->
+    <div id="doneAppt" style="display:none">
+      <h2>Thank you! 🙏</h2>
+      <p class="muted">Your appointment is set for<br><span class="big-num" id="apptTimeLabel" style="font-size:40px"></span></p>
+      <p style="margin-top:6px">If you confirmed this time with Rod, he’ll get you in as close to it as he can.</p>
+      <p class="small muted" style="margin-top:8px">Didn’t actually agree on a time with Rod? Your spot may not be honored — come back and choose <b>Walk-in</b>.</p>
+    </div>
     <img class="motiv" id="posImg" alt="A little motivation for your day" />
     <a class="btn" id="statusLink" href="#">See my live spot →</a>
-    <p class="small muted" style="margin-top:12px">Bookmark that link — it updates as people finish.</p>
+    <p class="small muted" id="bookmarkNote" style="margin-top:12px">Bookmark that link — it updates as people finish.</p>
   </div>
 
   <a class="igfoot" href="https://www.instagram.com/roddabarber/" target="_blank" rel="noopener">
@@ -123,6 +134,15 @@ function clearToasts() { document.querySelectorAll('#toasts .toast').forEach(t =
 $('apptTime').addEventListener('input', clearToasts);
 $('name').addEventListener('input', clearToasts);
 
+// Show a walk-in the day's pending appointments so they know one may be slotted in.
+function renderApptsAhead(box, list) {
+  if (!list || !list.length) { box.style.display = 'none'; return; }
+  const word = list.length === 1 ? 'appointment' : 'appointments';
+  box.innerHTML = `📅 <b>${list.length} ${word} ahead</b> · ${[...new Set(list.map(a => a.label))].join(', ')}`
+    + `<br><span class="small muted">Rod pauses for appointments at their time.</span>`;
+  box.style.display = 'block';
+}
+
 $('submit').onclick = async () => {
   const name = $('name').value.trim();
   const phone = $('phone').value.trim();
@@ -139,8 +159,19 @@ $('submit').onclick = async () => {
     if (!r.ok) { toast(data.message || 'Could not join', 'bad'); $('submit').disabled = false; return; }
     $('formCard').style.display = 'none';
     $('doneCard').style.display = 'block';
-    $('aheadNum').textContent = data.ahead;
-    $('asOf').textContent = 'as of ' + data.nowLabel + ' ET';
+    if (data.kind === 'appt') {
+      $('doneWalk').style.display = 'none';
+      $('doneAppt').style.display = 'block';
+      $('apptTimeLabel').textContent = data.apptLabel;
+      $('statusLink').textContent = 'See my status →';
+      $('bookmarkNote').textContent = "Bookmark this — it'll update when Rod's ready for you.";
+    } else {
+      $('doneAppt').style.display = 'none';
+      $('doneWalk').style.display = 'block';
+      $('aheadNum').textContent = data.walkAhead;
+      $('asOf').textContent = 'as of ' + data.nowLabel + ' ET';
+      renderApptsAhead($('apptsAheadBox'), data.apptsAhead);
+    }
     $('posImg').src = data.positiveImg;
     $('statusLink').href = '/status?id=' + data.id;
     localStorage.setItem('charrod_id', data.id);

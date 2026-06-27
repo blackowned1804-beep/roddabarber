@@ -227,6 +227,24 @@ function totalCutsWaiting() {
   return activeEntries().reduce((s, e) => s + e.partySize, 0);
 }
 
+// Walk-in cuts ahead of a given entry (excludes appointments).
+function walkInsAheadCuts(entry) {
+  const ordered = orderedActive();
+  let cuts = 0;
+  for (const e of ordered) {
+    if (e.id === entry.id) break;
+    if (e.kind === 'walkin') cuts += e.partySize;
+  }
+  return cuts;
+}
+// The day's still-pending appointments, earliest first (so walk-ins can see what's coming).
+function pendingApptList() {
+  return activeEntries()
+    .filter(e => e.kind === 'appt' && e.apptMin != null)
+    .sort((a, b) => a.apptMin - b.apptMin)
+    .map(e => ({ label: minToLabel(e.apptMin), apptMin: e.apptMin, partySize: e.partySize }));
+}
+
 function publicEntry(e) {
   return {
     id: e.id,
@@ -282,14 +300,14 @@ app.post('/api/join', (req, res) => {
   db.entries.push(entry);
   save();
 
-  const ahead = peopleAhead(entry.id);
   res.json({
     ok: true,
     id: entry.id,
-    ahead,
-    positive: pick(POSITIVE, seedFrom(entry.id)),
+    kind: entry.kind,
+    walkAhead: entry.kind === 'walkin' ? walkInsAheadCuts(entry) : 0,
+    apptsAhead: entry.kind === 'walkin' ? pendingApptList() : [],
+    apptLabel: entry.kind === 'appt' ? minToLabel(entry.apptMin) : null,
     positiveImg: pick(MESSAGE_IMAGES, seedFrom(entry.id)),
-    healthy: pick(HEALTHY, seedFrom(entry.id) + 1),
     nowLabel: nowLabel(),
   });
 });
@@ -337,14 +355,15 @@ function makeEntry({ name, phone, partySize, service, kind, apptMin, addedByBarb
 app.get('/api/status', (req, res) => {
   const e = db.entries.find(x => x.id === req.query.id);
   if (!e) return res.status(404).json({ error: 'not_found' });
-  const ahead = (e.status === 'waiting' || e.status === 'in_chair') ? peopleAhead(e.id) : 0;
+  const active = e.status === 'waiting' || e.status === 'in_chair';
   res.json({
     entry: publicEntry(e),
-    ahead,
+    kind: e.kind,
+    walkAhead: active && e.kind === 'walkin' ? walkInsAheadCuts(e) : 0,
+    apptsAhead: active && e.kind === 'walkin' ? pendingApptList() : [],
+    apptLabel: e.kind === 'appt' ? minToLabel(e.apptMin) : null,
     nowLabel: nowLabel(),
-    positive: pick(POSITIVE, seedFrom(e.id)),
     positiveImg: pick(MESSAGE_IMAGES, seedFrom(e.id)),
-    healthy: pick(HEALTHY, seedFrom(e.id) + (ahead || 0)),
   });
 });
 

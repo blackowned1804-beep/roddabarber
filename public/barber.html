@@ -116,6 +116,8 @@ const $ = id => document.getElementById(id);
 let PIN = sessionStorage.getItem('charrod_pin') || '';
 let seenIds = new Set();
 let firstLoad = true;
+let conflictTimes = new Set();   // appt minutes that are double-booked today
+let seenConflicts = new Set();
 let aParty = 1, aKind = 'walkin';
 const SVC = { haircut:'Haircut', beard:'Beard', haircut_beard:'Haircut & Beard', lineup:'Line-up' };
 
@@ -142,8 +144,9 @@ function start() {
 }
 
 function row(e, idx) {
+  const dupe = e.kind === 'appt' && e.apptMin != null && conflictTimes.has(e.apptMin);
   const pill = e.status === 'in_chair' ? '<span class="pill chair">In chair 💈</span>'
-    : e.kind === 'appt' ? `<span class="pill appt">Appt ${e.apptLabel}</span>`
+    : e.kind === 'appt' ? `<span class="pill appt">Appt ${e.apptLabel}</span>` + (dupe ? ' <span class="pill conflict">⚠ DOUBLE-BOOKED</span>' : '')
     : '<span class="pill walk">Walk-in</span>';
   const sub = `${e.serviceLabel} · ${e.partySize} ${e.partySize>1?'cuts':'cut'}` + (e.status==='waiting' ? ` · ${e.ahead} ahead` : '') + ` · 🕐 joined ${e.createdLabel}` + (e.addedByBarber ? ' · added by you' : '');
   let acts = '';
@@ -169,6 +172,20 @@ async function refresh() {
   $('cutoffLabel').textContent = d.state.cutoffMin != null ? `Last call set for ${d.state.cutoffLabel}` : 'No last-call set.';
 
   const q = d.queue;
+
+  // detect double-booked appointments (two pending appts at the same time today)
+  const apptCount = {};
+  q.filter(e => e.kind === 'appt' && e.apptMin != null).forEach(e => { apptCount[e.apptMin] = (apptCount[e.apptMin] || 0) + 1; });
+  conflictTimes = new Set(Object.keys(apptCount).filter(m => apptCount[m] > 1).map(Number));
+  for (const m of conflictTimes) {
+    if (!seenConflicts.has(m)) {
+      const label = (q.find(e => e.kind === 'appt' && e.apptMin === m) || {}).apptLabel || '';
+      toast('⚠ Two appointments booked for ' + label + ' — check your schedule!', 'bad');
+      beep();
+    }
+  }
+  seenConflicts = conflictTimes;
+
   $('queue').innerHTML = q.length ? q.map(row).join('') : '<p class="muted small">Nobody in line yet.</p>';
 
   // new-client alert

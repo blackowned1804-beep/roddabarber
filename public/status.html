@@ -25,9 +25,21 @@
     <div id="loading" class="muted">Loading your spot…</div>
 
     <div id="waiting" style="display:none">
-      <p class="muted">People ahead of you</p>
-      <div class="big-num" id="aheadNum">–</div>
-      <p class="muted small" id="asOf"></p>
+      <!-- Walk-in: live position -->
+      <div id="waitWalk">
+        <p class="muted">Walk-ins ahead of you</p>
+        <div class="big-num" id="aheadNum">–</div>
+        <p class="muted small" id="asOf"></p>
+        <div id="apptsAheadBox" class="msg" style="display:none;text-align:left"></div>
+      </div>
+      <!-- Appointment: no position, reassurance -->
+      <div id="waitAppt" style="display:none">
+        <div style="font-size:38px">📅</div>
+        <h2>Appointment set</h2>
+        <p class="muted">Your time</p>
+        <div class="big-num" id="apptTimeLabel" style="font-size:40px">–</div>
+        <p style="margin-top:6px">Rod will get you in as close to this time as he can.</p>
+      </div>
       <div id="info" class="small muted" style="margin:8px 0"></div>
       <img class="motiv" id="posImg" alt="A little motivation for your day" />
       <button class="btn danger" id="cancelBtn">Cancel my spot</button>
@@ -69,6 +81,14 @@ function show(which) {
   ['loading','waiting','chair','closed'].forEach(s => $(s).style.display = s === which ? 'block' : 'none');
 }
 
+function renderApptsAhead(box, list) {
+  if (!list || !list.length) { box.style.display = 'none'; return; }
+  const word = list.length === 1 ? 'appointment' : 'appointments';
+  box.innerHTML = `📅 <b>${list.length} ${word} ahead</b> · ${[...new Set(list.map(a => a.label))].join(', ')}`
+    + `<br><span class="small muted">Rod pauses for appointments at their time.</span>`;
+  box.style.display = 'block';
+}
+
 async function refresh() {
   if (!id) { show('closed'); $('closedTitle').textContent = 'No spot found'; $('closedText').textContent = 'Join the line to get your live spot.'; return; }
   try {
@@ -84,17 +104,27 @@ async function refresh() {
 
     // waiting
     show('waiting');
-    $('aheadNum').textContent = d.ahead;
-    $('asOf').textContent = 'as of ' + d.nowLabel + ' ET';
     const e = d.entry;
     $('info').textContent = `${e.serviceLabel} · party of ${e.partySize}` + (e.kind === 'appt' ? ` · appt ${e.apptLabel}` : ' · walk-in');
     $('posImg').src = d.positiveImg;
 
-    if (lastAhead !== null && d.ahead < lastAhead) {
-      toast('You moved up! ' + d.ahead + ' ahead now 🎉', 'good');
-      beep();
+    if (d.kind === 'appt') {
+      $('waitWalk').style.display = 'none';
+      $('waitAppt').style.display = 'block';
+      $('apptTimeLabel').textContent = d.apptLabel;
+      lastAhead = null;
+    } else {
+      $('waitAppt').style.display = 'none';
+      $('waitWalk').style.display = 'block';
+      $('aheadNum').textContent = d.walkAhead;
+      $('asOf').textContent = 'as of ' + d.nowLabel + ' ET';
+      renderApptsAhead($('apptsAheadBox'), d.apptsAhead);
+      if (lastAhead !== null && d.walkAhead < lastAhead) {
+        toast('You moved up! ' + d.walkAhead + ' walk-ins ahead now 🎉', 'good');
+        beep();
+      }
+      lastAhead = d.walkAhead;
     }
-    lastAhead = d.ahead;
   } catch (e) { /* keep last view on transient error */ }
 }
 

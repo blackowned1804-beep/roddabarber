@@ -83,6 +83,7 @@ input:focus, select:focus { border-color: var(--gold); }
 .pill.appt { background: rgba(68,147,248,.16); color: var(--blue); }
 .pill.walk { background: rgba(63,185,80,.16); color: var(--green); }
 .pill.chair { background: var(--gold); color: var(--gold-ink); }
+.pill.conflict { background: var(--red); color: #fff; }
 
 .motiv { display: block; width: min(230px, 64%); height: auto; margin: 16px auto 4px; border-radius: 16px; box-shadow: var(--shadow); }
 .msg { background: var(--card2); border-radius: 12px; padding: 12px 14px; margin-top: 12px; font-size: 14px; }

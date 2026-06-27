@@ -211,8 +211,9 @@ app.post('/api/join', (req, res) => {
     return res.status(403).json({ error: 'closed', message: 'Rod is not taking new clients right now. Please check back soon!' });
   }
   if (!name || !String(name).trim()) return res.status(400).json({ error: 'name required' });
-  if (!phone || !String(phone).trim()) return res.status(400).json({ error: 'phone required' });
   if (!SERVICES[service]) return res.status(400).json({ error: 'pick a service' });
+  // Phone is optional for now (no SMS yet) — kept for Phase 2 texting.
+  const cleanPhone = phone ? String(phone).trim() : '';
 
   const ps = Math.max(1, Math.min(10, parseInt(partySize, 10) || 1));
   const nowMin = etMinutesNow();
@@ -229,7 +230,7 @@ app.post('/api/join', (req, res) => {
     return res.status(403).json({ error: 'past_cutoff', message: `Last call for walk-ins today was ${minToLabel(db.state.cutoffMin)}. See you next time!` });
   }
 
-  const entry = makeEntry({ name, phone, partySize: ps, service, kind: entryKind, apptMin, addedByBarber: false });
+  const entry = makeEntry({ name, phone: cleanPhone, partySize: ps, service, kind: entryKind, apptMin, addedByBarber: false });
   db.entries.push(entry);
   save();
 

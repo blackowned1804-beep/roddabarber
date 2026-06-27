@@ -22,7 +22,7 @@
     <label>Your name</label>
     <input id="name" placeholder="First name" autocomplete="given-name" />
 
-    <label>Cell phone</label>
+    <label>Cell phone <span class="muted small">(optional)</span></label>
     <input id="phone" type="tel" inputmode="tel" placeholder="(555) 123-4567" autocomplete="tel" />
 
     <label>How many haircuts? <span class="muted small">(bringing the kids? count everyone)</span></label>
@@ -88,7 +88,6 @@ $('submit').onclick = async () => {
   const name = $('name').value.trim();
   const phone = $('phone').value.trim();
   if (!name) return toast('Please enter your name', 'bad');
-  if (!phone) return toast('Please enter your phone number', 'bad');
   const body = { name, phone, partySize: party, service: $('service').value, kind };
   if (kind === 'appt') {
     if (!$('apptTime').value) return toast('Please pick your appointment time', 'bad');

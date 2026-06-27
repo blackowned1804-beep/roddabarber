@@ -18,6 +18,7 @@ const crypto = require('crypto');
 const QRCode = require('qrcode');
 
 const app = express();
+app.set('trust proxy', true);   // Render terminates TLS at a proxy; honor x-forwarded-proto so QR uses https
 app.use(express.json());
 app.use(express.static(path.join(__dirname, 'public')));
 

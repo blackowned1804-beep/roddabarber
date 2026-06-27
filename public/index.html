@@ -121,6 +121,7 @@ function selectKind(k) {
   kind = k;
   $('kindSeg').querySelectorAll('button').forEach(x => x.classList.toggle('active', x.dataset.kind === k));
   $('apptWrap').style.display = k === 'appt' ? 'block' : 'none';
+  $('submit').textContent = k === 'appt' ? 'Confirm time' : 'Get in line';
 }
 $('kindSeg').querySelectorAll('button').forEach(b => b.onclick = () => {
   if (b.dataset.kind === 'appt') { $('apptModal').classList.add('show'); return; } // gate behind confirmation

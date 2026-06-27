@@ -507,7 +507,18 @@ app.get('/api/barber/stats', checkPin, (req, res) => {
     const byService = {};
     for (const k of Object.keys(SERVICES)) byService[k] = 0;
     for (const e of list) byService[e.service] = (byService[e.service] || 0) + e.partySize;
-    return { sessions: list.length, cuts, byService };
+    // Day-of-week breakdown: total cuts per weekday (Sun..Sat) and the number of
+    // distinct dates he was open on each weekday (for a per-open-day average).
+    const byWeekday = [0, 0, 0, 0, 0, 0, 0];
+    const wdDates = [new Set(), new Set(), new Set(), new Set(), new Set(), new Set(), new Set()];
+    for (const e of list) {
+      const [y, m, d] = e.date.split('-').map(Number);
+      const wd = new Date(Date.UTC(y, m - 1, d)).getUTCDay(); // 0=Sun .. 6=Sat
+      byWeekday[wd] += e.partySize;
+      wdDates[wd].add(e.date);
+    }
+    const weekdayDays = wdDates.map((s) => s.size);
+    return { sessions: list.length, cuts, byService, byWeekday, weekdayDays };
   }
 
   res.json({

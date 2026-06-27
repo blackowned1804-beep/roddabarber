@@ -101,6 +101,8 @@
     </div>
     <div class="center"><div class="big-num" id="statCuts" style="font-size:46px">0</div><div class="dim">cuts</div></div>
     <div id="statBreak" style="margin-top:14px"></div>
+    <div class="dim" style="margin-top:18px">Busiest days of the week <span id="statWeekdayHint" class="dim" style="font-size:11px"></span></div>
+    <div class="wkbars" id="statWeekday"></div>
     <div class="dim" style="margin-top:16px">Last 14 days</div>
     <div class="bars" id="statBars"></div>
     <button class="btn secondary" id="statsClose" style="margin-top:18px">Close</button>
@@ -233,6 +235,25 @@ function renderStats() {
   const max = Math.max(1, ...statData.daily.map(d => d.cuts));
   $('statBars').innerHTML = statData.daily.map(d =>
     `<div class="b" title="${d.date}: ${d.cuts}"><i style="height:${Math.round(d.cuts/max*100)}%"></i></div>`).join('');
+
+  // Busiest days of the week (for the selected period)
+  const WD = ['Sun','Mon','Tue','Wed','Thu','Fri','Sat'];
+  const tot = bucket.byWeekday || [0,0,0,0,0,0,0];
+  const days = bucket.weekdayDays || [0,0,0,0,0,0,0];
+  const wmax = Math.max(1, ...tot);
+  const busiest = tot.indexOf(Math.max(...tot));
+  $('statWeekdayHint').textContent = bucket.cuts ? `· busiest: ${WD[busiest]}` : '';
+  $('statWeekday').innerHTML = WD.map((name, i) => {
+    const avg = days[i] ? (tot[i] / days[i]) : 0;
+    const h = Math.round(tot[i] / wmax * 100);
+    const top = i === busiest && tot[i] > 0;
+    return `<div class="wk">
+      <div class="wknum">${tot[i] || ''}</div>
+      <div class="wkbar"><i style="height:${h}%" class="${top ? 'hot' : ''}"></i></div>
+      <div class="wklbl">${name}</div>
+      <div class="wkavg">${days[i] ? avg.toFixed(1) + '/day' : '—'}</div>
+    </div>`;
+  }).join('');
 }
 
 if (PIN) start();

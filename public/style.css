@@ -85,6 +85,18 @@ input:focus, select:focus { border-color: var(--gold); }
 .pill.chair { background: var(--gold); color: var(--gold-ink); }
 .pill.conflict { background: var(--red); color: #fff; }
 
+.conflict-banner {
+  background: var(--red); color: #fff; border-radius: 14px; padding: 14px 16px; margin-bottom: 14px;
+  font-weight: 800; font-size: 15px; line-height: 1.35; text-align: center;
+  border: 2px solid #ff8a82; box-shadow: 0 0 0 0 rgba(229,83,75,.7); animation: clashPulse 1.4s ease-out infinite;
+}
+.conflict-banner .cb-list { display: block; margin-top: 6px; font-weight: 700; font-size: 14px; }
+@keyframes clashPulse {
+  0% { box-shadow: 0 0 0 0 rgba(229,83,75,.6); }
+  70% { box-shadow: 0 0 0 14px rgba(229,83,75,0); }
+  100% { box-shadow: 0 0 0 0 rgba(229,83,75,0); }
+}
+
 .motiv { display: block; width: min(230px, 64%); height: auto; margin: 16px auto 4px; border-radius: 16px; box-shadow: var(--shadow); }
 .msg { background: var(--card2); border-radius: 12px; padding: 12px 14px; margin-top: 12px; font-size: 14px; }
 .msg.positive { border-left: 3px solid var(--gold); }

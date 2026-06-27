@@ -31,6 +31,8 @@
   <!-- Dashboard -->
   <div id="dash" style="display:none">
 
+    <div id="conflictBanner" class="conflict-banner" style="display:none"></div>
+
     <div class="card">
       <div class="grid2">
         <div class="stat"><div class="n" id="sWaiting">0</div><div class="l">people waiting</div></div>
@@ -116,8 +118,9 @@ const $ = id => document.getElementById(id);
 let PIN = sessionStorage.getItem('charrod_pin') || '';
 let seenIds = new Set();
 let firstLoad = true;
-let conflictTimes = new Set();   // appt minutes that are double-booked today
-let seenConflicts = new Set();
+let conflictIds = new Set();     // appt entry ids that clash (within 15 min of another appt)
+let lastConflictSig = '';
+const APPT_CLASH_MINS = 15;      // flag appointments this close together
 let aParty = 1, aKind = 'walkin';
 const SVC = { haircut:'Haircut', beard:'Beard', haircut_beard:'Haircut & Beard', lineup:'Line-up' };
 
@@ -144,9 +147,9 @@ function start() {
 }
 
 function row(e, idx) {
-  const dupe = e.kind === 'appt' && e.apptMin != null && conflictTimes.has(e.apptMin);
+  const dupe = e.kind === 'appt' && conflictIds.has(e.id);
   const pill = e.status === 'in_chair' ? '<span class="pill chair">In chair 💈</span>'
-    : e.kind === 'appt' ? `<span class="pill appt">Appt ${e.apptLabel}</span>` + (dupe ? ' <span class="pill conflict">⚠ DOUBLE-BOOKED</span>' : '')
+    : e.kind === 'appt' ? `<span class="pill appt">Appt ${e.apptLabel}</span>` + (dupe ? ' <span class="pill conflict">⚠ CLASH</span>' : '')
     : '<span class="pill walk">Walk-in</span>';
   const sub = `${e.serviceLabel} · ${e.partySize} ${e.partySize>1?'cuts':'cut'}` + (e.status==='waiting' ? ` · ${e.ahead} ahead` : '') + ` · 🕐 joined ${e.createdLabel}` + (e.addedByBarber ? ' · added by you' : '');
   let acts = '';
@@ -173,18 +176,27 @@ async function refresh() {
 
   const q = d.queue;
 
-  // detect double-booked appointments (two pending appts at the same time today)
-  const apptCount = {};
-  q.filter(e => e.kind === 'appt' && e.apptMin != null).forEach(e => { apptCount[e.apptMin] = (apptCount[e.apptMin] || 0) + 1; });
-  conflictTimes = new Set(Object.keys(apptCount).filter(m => apptCount[m] > 1).map(Number));
-  for (const m of conflictTimes) {
-    if (!seenConflicts.has(m)) {
-      const label = (q.find(e => e.kind === 'appt' && e.apptMin === m) || {}).apptLabel || '';
-      toast('⚠ Two appointments booked for ' + label + ' — check your schedule!', 'bad');
-      beep();
+  // detect appointment clashes: any two pending appts within 15 min (or same time)
+  const appts = q.filter(e => e.kind === 'appt' && e.apptMin != null);
+  conflictIds = new Set();
+  for (let i = 0; i < appts.length; i++) {
+    for (let j = i + 1; j < appts.length; j++) {
+      if (Math.abs(appts[i].apptMin - appts[j].apptMin) <= APPT_CLASH_MINS) {
+        conflictIds.add(appts[i].id); conflictIds.add(appts[j].id);
+      }
     }
   }
-  seenConflicts = conflictTimes;
+  const clashing = appts.filter(a => conflictIds.has(a.id)).sort((a, b) => a.apptMin - b.apptMin);
+  if (clashing.length) {
+    $('conflictBanner').innerHTML = '⚠️ APPOINTMENT CLASH — within 15 min of each other:<br><span class="cb-list">'
+      + clashing.map(a => `${esc(a.name)} · ${a.apptLabel}`).join('  ·  ') + '</span>';
+    $('conflictBanner').style.display = 'block';
+  } else {
+    $('conflictBanner').style.display = 'none';
+  }
+  const sig = clashing.map(a => a.id).join(',');
+  if (clashing.length && sig !== lastConflictSig) { toast('⚠ Appointment clash — two appointments within 15 min!', 'bad'); beep(); }
+  lastConflictSig = sig;
 
   $('queue').innerHTML = q.length ? q.map(row).join('') : '<p class="muted small">Nobody in line yet.</p>';
 

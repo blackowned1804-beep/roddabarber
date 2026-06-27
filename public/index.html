@@ -49,12 +49,14 @@
     <label>Walk-in or appointment?</label>
     <div class="seg" id="kindSeg">
       <button type="button" data-kind="walkin" class="active">Walk-in now</button>
-      <button type="button" data-kind="appt">I have an appt</button>
+      <button type="button" data-kind="appt">Confirmed Appt</button>
     </div>
+    <p class="small muted" style="margin-top:6px">Appointments must be arranged with Rod first (call or text).</p>
 
     <div id="apptWrap" style="display:none">
-      <label>Appointment time (Eastern)</label>
+      <label>Your confirmed time (Eastern)</label>
       <input id="apptTime" type="time" />
+      <p class="small" style="color:var(--gold);margin-top:8px">⚠️ Only enter the exact time you already agreed on with Rod.</p>
     </div>
 
     <button class="btn" id="submit">Get in line</button>
@@ -73,6 +75,17 @@
   </div>
 </div>
 
+<div class="modal-host" id="apptModal">
+  <div class="modal">
+    <div style="font-size:40px">📅</div>
+    <h3>Did you confirm with Rod?</h3>
+    <p class="muted small">“Confirmed Appointment” is <b>only</b> for clients who already agreed on a specific day &amp; time with Rod by call or text.</p>
+    <p class="small" style="color:var(--gold)">If you haven’t, your appointment won’t be honored — you’ll need to pick <b>Walk-in</b> and join the back of the line.</p>
+    <button class="btn green" id="apptYes" style="margin-top:16px">Yes — I confirmed a time with Rod</button>
+    <button class="btn secondary" id="apptNo">No — I’ll do Walk-in</button>
+  </div>
+</div>
+
 <div class="install-banner" id="installBanner">
   <img src="/img/icon-192.png" alt="" />
   <div class="it" id="installText"></div>
@@ -88,12 +101,17 @@ const $ = id => document.getElementById(id);
 $('minus').onclick = () => { party = Math.max(1, party - 1); $('party').textContent = party; };
 $('plus').onclick  = () => { party = Math.min(10, party + 1); $('party').textContent = party; };
 
+function selectKind(k) {
+  kind = k;
+  $('kindSeg').querySelectorAll('button').forEach(x => x.classList.toggle('active', x.dataset.kind === k));
+  $('apptWrap').style.display = k === 'appt' ? 'block' : 'none';
+}
 $('kindSeg').querySelectorAll('button').forEach(b => b.onclick = () => {
-  $('kindSeg').querySelectorAll('button').forEach(x => x.classList.remove('active'));
-  b.classList.add('active');
-  kind = b.dataset.kind;
-  $('apptWrap').style.display = kind === 'appt' ? 'block' : 'none';
+  if (b.dataset.kind === 'appt') { $('apptModal').classList.add('show'); return; } // gate behind confirmation
+  selectKind('walkin');
 });
+$('apptYes').onclick = () => { $('apptModal').classList.remove('show'); selectKind('appt'); };
+$('apptNo').onclick  = () => { $('apptModal').classList.remove('show'); selectKind('walkin'); toast('No problem — choose Walk-in to join the line.', 'warn'); };
 
 $('submit').onclick = async () => {
   const name = $('name').value.trim();

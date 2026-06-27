@@ -494,6 +494,9 @@ app.get('/api/qr', async (req, res) => {
   }
 });
 
+// Lightweight health check (used by the self-ping below)
+app.get('/healthz', (_req, res) => res.json({ ok: true, t: nowLabel() }));
+
 // Pretty routes
 app.get('/status', (_req, res) => res.sendFile(path.join(__dirname, 'public', 'status.html')));
 app.get('/barber', (_req, res) => res.sendFile(path.join(__dirname, 'public', 'barber.html')));
@@ -503,3 +506,15 @@ app.listen(PORT, () => {
   console.log(`Rod da Barber queue running on http://localhost:${PORT}`);
   console.log(`Barber PIN: ${BARBER_PIN}`);
 });
+
+// Keep-warm self-ping: on Render, hit our own public URL every 10 min so the
+// free instance never spins down (no cold starts, no external service needed).
+// Render provides RENDER_EXTERNAL_URL automatically; locally this is unset so
+// the pinger stays off.
+const SELF_URL = process.env.RENDER_EXTERNAL_URL;
+if (SELF_URL) {
+  setInterval(() => {
+    fetch(`${SELF_URL}/healthz`).catch(() => {});
+  }, 10 * 60 * 1000);
+  console.log(`Keep-warm self-ping enabled → ${SELF_URL}/healthz every 10 min`);
+}

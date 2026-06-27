@@ -9,10 +9,23 @@
 <link rel="apple-touch-icon" href="/img/apple-touch-icon.png" />
 <link rel="stylesheet" href="/style.css" />
 <style>
+  @page { margin: 0.4in; }
   @media print {
     .noprint { display:none !important; }
-    .card { box-shadow:none; border:none; background:transparent; padding:0; }
-    body { background:#000; -webkit-print-color-adjust:exact; print-color-adjust:exact; }
+    html, body { background:#000; -webkit-print-color-adjust:exact; print-color-adjust:exact; }
+    .wrap { padding:0; max-width:none; margin:0; }
+    .card { box-shadow:none; border:none; background:transparent; padding:0; margin:0; }
+    /* Shrink everything so the whole flyer fits on ONE page, and keep it together. */
+    .printbox { break-inside:avoid; page-break-inside:avoid; padding:18px 16px; border:none; }
+    .printbox .flyer-logo { width:200px; }
+    .printbox h2 { font-size:19px; margin:8px 0 2px; }
+    .printbox .sub2 { font-size:11px; margin-bottom:10px; }
+    .qrwrap { padding:10px; }
+    .qrwrap img { width:208px; height:208px; }
+    .printbox .url { font-size:11px; margin-top:7px; }
+    .printbox .note { font-size:14px; margin-top:9px; }
+    .printbox .ig { margin-top:9px; }
+    .printbox .ig svg { width:28px; height:28px; }
   }
   .printbox { background:#000; border:1px solid #222; border-radius:20px; padding:30px 24px; text-align:center; }
   .printbox .flyer-logo { width:min(300px,82%); height:auto; }

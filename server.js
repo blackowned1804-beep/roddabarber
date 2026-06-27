@@ -27,7 +27,12 @@ const BARBER_PIN = process.env.BARBER_PIN || '1234';
 const DATA_FILE = process.env.DATA_FILE || path.join(__dirname, 'data.json');
 
 // ---------------------------------------------------------------------------
-// Persistence (tiny JSON store — plenty for this scale)
+// Persistence
+//   - If DATABASE_URL is set (Render + Neon Postgres), the whole app state is
+//     stored as one JSONB row, so it survives restarts/redeploys forever.
+//   - Otherwise it falls back to a local JSON file (handy for development).
+//   All queue logic still runs against the in-memory `db` object below; only
+//   loading and saving change.
 // ---------------------------------------------------------------------------
 let db = {
   entries: [],          // every client ever, across all days
@@ -37,26 +42,63 @@ let db = {
   },
 };
 
-function load() {
-  try {
-    if (fs.existsSync(DATA_FILE)) {
-      db = JSON.parse(fs.readFileSync(DATA_FILE, 'utf8'));
-      db.entries = db.entries || [];
-      db.state = db.state || { open: true, cutoffMin: null };
+const DATABASE_URL = process.env.DATABASE_URL;
+let pool = null;
+if (DATABASE_URL) {
+  const { Pool } = require('pg');
+  pool = new Pool({
+    connectionString: DATABASE_URL,
+    ssl: { rejectUnauthorized: false },
+    connectionTimeoutMillis: 12000,
+    max: 4,
+  });
+  pool.on('error', (e) => console.error('pg pool error:', e.message));
+}
+
+async function load() {
+  if (pool) {
+    await pool.query('CREATE TABLE IF NOT EXISTS app_state (id int PRIMARY KEY, data jsonb)');
+    const r = await pool.query('SELECT data FROM app_state WHERE id = 1');
+    if (r.rows.length && r.rows[0].data) {
+      const d = r.rows[0].data;
+      db.entries = d.entries || [];
+      db.state = d.state || { open: true, cutoffMin: null };
     }
-  } catch (e) {
-    console.error('Could not read data.json, starting fresh:', e.message);
+    console.log(`Loaded ${db.entries.length} entries from Postgres.`);
+  } else {
+    try {
+      if (fs.existsSync(DATA_FILE)) {
+        const d = JSON.parse(fs.readFileSync(DATA_FILE, 'utf8'));
+        db.entries = d.entries || [];
+        db.state = d.state || { open: true, cutoffMin: null };
+      }
+    } catch (e) {
+      console.error('Could not read data.json, starting fresh:', e.message);
+    }
   }
 }
+
 let saveTimer = null;
 function save() {
   clearTimeout(saveTimer);
-  saveTimer = setTimeout(() => {
-    try { fs.writeFileSync(DATA_FILE, JSON.stringify(db, null, 2)); }
-    catch (e) { console.error('save failed:', e.message); }
-  }, 50);
+  saveTimer = setTimeout(doSave, 200);
 }
-load();
+async function doSave() {
+  const payload = JSON.stringify({ entries: db.entries, state: db.state });
+  if (pool) {
+    try {
+      await pool.query(
+        'INSERT INTO app_state (id, data) VALUES (1, $1::jsonb) ON CONFLICT (id) DO UPDATE SET data = $1::jsonb',
+        [payload],
+      );
+    } catch (e) {
+      console.error('db save failed:', e.message);
+    }
+  } else {
+    try { fs.writeFileSync(DATA_FILE, payload); }
+    catch (e) { console.error('save failed:', e.message); }
+  }
+}
 
 // ---------------------------------------------------------------------------
 // Eastern-time helpers (DST-safe via Intl)
@@ -511,10 +553,19 @@ app.get('/status', (_req, res) => res.sendFile(path.join(__dirname, 'public', 's
 app.get('/barber', (_req, res) => res.sendFile(path.join(__dirname, 'public', 'barber.html')));
 app.get('/qr', (_req, res) => res.sendFile(path.join(__dirname, 'public', 'qr.html')));
 
-app.listen(PORT, () => {
-  console.log(`Rod da Barber queue running on http://localhost:${PORT}`);
-  console.log(`Barber PIN: ${BARBER_PIN}`);
-});
+// Load persisted state first, then start serving.
+(async () => {
+  try {
+    await load();
+  } catch (e) {
+    console.error('Initial load failed (starting with empty state):', e.message);
+  }
+  app.listen(PORT, () => {
+    console.log(`Rod da Barber queue running on http://localhost:${PORT}`);
+    console.log(`Storage: ${pool ? 'Postgres (persistent)' : 'local file'}`);
+    console.log(`Barber PIN: ${BARBER_PIN}`);
+  });
+})();
 
 // Keep-warm self-ping: on Render, hit our own public URL every 10 min so the
 // free instance never spins down (no cold starts, no external service needed).

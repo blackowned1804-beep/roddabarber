@@ -121,6 +121,12 @@ const BARBER_BREAK = [
   "Hat trick of cuts done. Hydrate and reset your posture. 💧",
   "3 down. Quick break: stretch your back, shake out your arms.",
 ];
+// Motivational graphics shown on the client confirmation / live-spot screen.
+const MESSAGE_IMAGES = [
+  'knicks', 'patience', 'choose-peace', 'drink-water', 'growth',
+  'lead-with-love', 'love-over-hate', 'keep-moving-forward', 'protect-your-peace', 'stay-strong',
+].map(n => `/img/messages/${n}.png`);
+
 function pick(arr, seed) {
   const i = seed == null
     ? Math.floor((Date.now() / 1000) % arr.length)
@@ -240,6 +246,7 @@ app.post('/api/join', (req, res) => {
     id: entry.id,
     ahead,
     positive: pick(POSITIVE, seedFrom(entry.id)),
+    positiveImg: pick(MESSAGE_IMAGES, seedFrom(entry.id)),
     healthy: pick(HEALTHY, seedFrom(entry.id) + 1),
     nowLabel: nowLabel(),
   });
@@ -294,6 +301,7 @@ app.get('/api/status', (req, res) => {
     ahead,
     nowLabel: nowLabel(),
     positive: pick(POSITIVE, seedFrom(e.id)),
+    positiveImg: pick(MESSAGE_IMAGES, seedFrom(e.id)),
     healthy: pick(HEALTHY, seedFrom(e.id) + (ahead || 0)),
   });
 });

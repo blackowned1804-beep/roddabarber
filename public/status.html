@@ -23,7 +23,7 @@
       <div class="big-num" id="aheadNum">–</div>
       <p class="muted small" id="asOf"></p>
       <div id="info" class="small muted" style="margin:8px 0"></div>
-      <div class="msg positive" id="posMsg"></div>
+      <img class="motiv" id="posImg" alt="A little motivation for your day" />
       <div class="msg healthy" id="healthMsg"></div>
       <button class="btn danger" id="cancelBtn">Cancel my spot</button>
     </div>
@@ -73,7 +73,7 @@ async function refresh() {
     $('asOf').textContent = 'as of ' + d.nowLabel + ' ET';
     const e = d.entry;
     $('info').textContent = `${e.serviceLabel} · party of ${e.partySize}` + (e.kind === 'appt' ? ` · appt ${e.apptLabel}` : ' · walk-in');
-    $('posMsg').textContent = d.positive;
+    $('posImg').src = d.positiveImg;
     $('healthMsg').textContent = d.healthy;
 
     if (lastAhead !== null && d.ahead < lastAhead) {

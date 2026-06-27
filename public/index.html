@@ -61,7 +61,7 @@
     <p class="muted">There are</p>
     <div class="big-num" id="aheadNum">0</div>
     <p class="muted">people ahead of you<br><span class="small" id="asOf"></span></p>
-    <div class="msg positive" id="posMsg"></div>
+    <img class="motiv" id="posImg" alt="A little motivation for your day" />
     <div class="msg healthy" id="healthMsg"></div>
     <a class="btn" id="statusLink" href="#">See my live spot →</a>
     <p class="small muted" style="margin-top:12px">Bookmark that link — it updates as people finish.</p>
@@ -102,7 +102,7 @@ $('submit').onclick = async () => {
     $('doneCard').style.display = 'block';
     $('aheadNum').textContent = data.ahead;
     $('asOf').textContent = 'as of ' + data.nowLabel + ' ET';
-    $('posMsg').textContent = data.positive;
+    $('posImg').src = data.positiveImg;
     $('healthMsg').textContent = data.healthy;
     $('statusLink').href = '/status?id=' + data.id;
     localStorage.setItem('charrod_id', data.id);

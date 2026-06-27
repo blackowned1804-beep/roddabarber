@@ -1,3 +1,8 @@
+// Register the service worker so the site is installable as a home-screen app.
+if ('serviceWorker' in navigator) {
+  navigator.serviceWorker.register('/sw.js').catch(() => {});
+}
+
 // Shared tiny helpers
 function toast(text, kind) {
   const host = document.getElementById('toasts');

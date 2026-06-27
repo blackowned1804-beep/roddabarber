@@ -1,0 +1,116 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+<meta name="theme-color" content="#0f1115" />
+<title>Charrod the Barber — Get in line</title>
+<link rel="stylesheet" href="/style.css" />
+</head>
+<body>
+<div class="wrap">
+  <div class="brand">
+    <div class="mark">✂️</div>
+    <div><h1>Charrod the Barber</h1><div class="sub">Get in line — it's quick</div></div>
+  </div>
+
+  <!-- FORM -->
+  <div id="formCard" class="card">
+    <h2>Join the line</h2>
+
+    <label>Your name</label>
+    <input id="name" placeholder="First name" autocomplete="given-name" />
+
+    <label>Cell phone</label>
+    <input id="phone" type="tel" inputmode="tel" placeholder="(555) 123-4567" autocomplete="tel" />
+
+    <label>How many haircuts? <span class="muted small">(bringing the kids? count everyone)</span></label>
+    <div class="stepper">
+      <button type="button" id="minus">–</button>
+      <div class="val" id="party">1</div>
+      <button type="button" id="plus">+</button>
+    </div>
+
+    <label>What are you getting?</label>
+    <select id="service">
+      <option value="haircut">Haircut</option>
+      <option value="beard">Beard</option>
+      <option value="haircut_beard">Haircut &amp; Beard</option>
+      <option value="lineup">Line-up</option>
+    </select>
+
+    <label>Walk-in or appointment?</label>
+    <div class="seg" id="kindSeg">
+      <button type="button" data-kind="walkin" class="active">Walk-in now</button>
+      <button type="button" data-kind="appt">I have an appt</button>
+    </div>
+
+    <div id="apptWrap" style="display:none">
+      <label>Appointment time (Eastern)</label>
+      <input id="apptTime" type="time" />
+    </div>
+
+    <button class="btn" id="submit">Get in line</button>
+    <p class="small muted center" style="margin-top:14px">You'll get a live link showing your spot. It updates by itself.</p>
+  </div>
+
+  <!-- CONFIRMATION -->
+  <div id="doneCard" class="card center" style="display:none">
+    <h2>You're in line! 🎉</h2>
+    <p class="muted">There are</p>
+    <div class="big-num" id="aheadNum">0</div>
+    <p class="muted">people ahead of you<br><span class="small" id="asOf"></span></p>
+    <div class="msg positive" id="posMsg"></div>
+    <div class="msg healthy" id="healthMsg"></div>
+    <a class="btn" id="statusLink" href="#">See my live spot →</a>
+    <p class="small muted" style="margin-top:12px">Bookmark that link — it updates as people finish.</p>
+  </div>
+</div>
+
+<div class="toast-host" id="toasts"></div>
+<script src="/app.js"></script>
+<script>
+let party = 1, kind = 'walkin';
+const $ = id => document.getElementById(id);
+
+$('minus').onclick = () => { party = Math.max(1, party - 1); $('party').textContent = party; };
+$('plus').onclick  = () => { party = Math.min(10, party + 1); $('party').textContent = party; };
+
+$('kindSeg').querySelectorAll('button').forEach(b => b.onclick = () => {
+  $('kindSeg').querySelectorAll('button').forEach(x => x.classList.remove('active'));
+  b.classList.add('active');
+  kind = b.dataset.kind;
+  $('apptWrap').style.display = kind === 'appt' ? 'block' : 'none';
+});
+
+$('submit').onclick = async () => {
+  const name = $('name').value.trim();
+  const phone = $('phone').value.trim();
+  if (!name) return toast('Please enter your name', 'bad');
+  if (!phone) return toast('Please enter your phone number', 'bad');
+  const body = { name, phone, partySize: party, service: $('service').value, kind };
+  if (kind === 'appt') {
+    if (!$('apptTime').value) return toast('Please pick your appointment time', 'bad');
+    body.apptTime = $('apptTime').value;
+  }
+  $('submit').disabled = true;
+  try {
+    const r = await fetch('/api/join', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
+    const data = await r.json();
+    if (!r.ok) { toast(data.message || 'Could not join', 'bad'); $('submit').disabled = false; return; }
+    $('formCard').style.display = 'none';
+    $('doneCard').style.display = 'block';
+    $('aheadNum').textContent = data.ahead;
+    $('asOf').textContent = 'as of ' + data.nowLabel + ' ET';
+    $('posMsg').textContent = data.positive;
+    $('healthMsg').textContent = data.healthy;
+    $('statusLink').href = '/status?id=' + data.id;
+    localStorage.setItem('charrod_id', data.id);
+  } catch (e) {
+    toast('Network error — try again', 'bad');
+    $('submit').disabled = false;
+  }
+};
+</script>
+</body>
+</html>

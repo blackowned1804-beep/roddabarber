@@ -1,0 +1,97 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+<meta name="theme-color" content="#0f1115" />
+<title>My spot — Charrod the Barber</title>
+<link rel="stylesheet" href="/style.css" />
+</head>
+<body>
+<div class="wrap">
+  <div class="brand">
+    <div class="mark">✂️</div>
+    <div><h1>Charrod the Barber</h1><div class="sub">Your live spot</div></div>
+  </div>
+
+  <div id="card" class="card center">
+    <div id="loading" class="muted">Loading your spot…</div>
+
+    <div id="waiting" style="display:none">
+      <p class="muted">People ahead of you</p>
+      <div class="big-num" id="aheadNum">–</div>
+      <p class="muted small" id="asOf"></p>
+      <div id="info" class="small muted" style="margin:8px 0"></div>
+      <div class="msg positive" id="posMsg"></div>
+      <div class="msg healthy" id="healthMsg"></div>
+      <button class="btn danger" id="cancelBtn">Cancel my spot</button>
+    </div>
+
+    <div id="chair" style="display:none">
+      <div style="font-size:48px">💈</div>
+      <h2>You're up — head to the chair!</h2>
+      <div class="msg positive" id="chairMsg">Charrod is ready for you.</div>
+    </div>
+
+    <div id="closed" style="display:none">
+      <div style="font-size:42px">✅</div>
+      <h2 id="closedTitle">All done!</h2>
+      <p class="muted" id="closedText">Thanks for coming in. Look sharp!</p>
+      <a class="btn secondary" href="/">Get back in line</a>
+    </div>
+  </div>
+</div>
+
+<div class="toast-host" id="toasts"></div>
+<script src="/app.js"></script>
+<script>
+const $ = id => document.getElementById(id);
+const id = new URLSearchParams(location.search).get('id') || localStorage.getItem('charrod_id');
+let lastAhead = null;
+
+function show(which) {
+  ['loading','waiting','chair','closed'].forEach(s => $(s).style.display = s === which ? 'block' : 'none');
+}
+
+async function refresh() {
+  if (!id) { show('closed'); $('closedTitle').textContent = 'No spot found'; $('closedText').textContent = 'Join the line to get your live spot.'; return; }
+  try {
+    const r = await fetch('/api/status?id=' + encodeURIComponent(id));
+    if (r.status === 404) { show('closed'); $('closedTitle').textContent = 'Spot not found'; return; }
+    const d = await r.json();
+    const st = d.entry.status;
+
+    if (st === 'in_chair') { show('chair'); if (lastAhead !== 0) beep(); lastAhead = 0; return; }
+    if (st === 'done') { show('closed'); $('closedTitle').textContent = 'All done! ✅'; $('closedText').textContent = 'Thanks for coming in — look sharp!'; return; }
+    if (st === 'cancelled') { show('closed'); $('closedTitle').textContent = 'Spot cancelled'; $('closedText').textContent = 'You removed yourself from the line.'; return; }
+    if (st === 'no_show') { show('closed'); $('closedTitle').textContent = 'Marked as a no-show'; $('closedText').textContent = 'Looks like you missed your turn. Come back any time!'; return; }
+
+    // waiting
+    show('waiting');
+    $('aheadNum').textContent = d.ahead;
+    $('asOf').textContent = 'as of ' + d.nowLabel + ' ET';
+    const e = d.entry;
+    $('info').textContent = `${e.serviceLabel} · party of ${e.partySize}` + (e.kind === 'appt' ? ` · appt ${e.apptLabel}` : ' · walk-in');
+    $('posMsg').textContent = d.positive;
+    $('healthMsg').textContent = d.healthy;
+
+    if (lastAhead !== null && d.ahead < lastAhead) {
+      toast('You moved up! ' + d.ahead + ' ahead now 🎉', 'good');
+      beep();
+    }
+    lastAhead = d.ahead;
+  } catch (e) { /* keep last view on transient error */ }
+}
+
+$('cancelBtn').onclick = async () => {
+  if (!confirm('Cancel your spot in line?')) return;
+  await fetch('/api/cancel', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ id }) });
+  refresh();
+};
+
+refresh();
+setInterval(refresh, 5000);
+document.addEventListener('visibilitychange', () => { if (!document.hidden) refresh(); });
+</script>
+</body>
+</html>

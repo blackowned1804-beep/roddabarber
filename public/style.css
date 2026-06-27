@@ -1,0 +1,117 @@
+:root {
+  --bg: #0f1115;
+  --card: #181b22;
+  --card2: #20242e;
+  --ink: #f3f5f8;
+  --muted: #9aa3b2;
+  --line: #2a2f3a;
+  --gold: #d9a441;
+  --gold-ink: #1a1206;
+  --green: #3fb950;
+  --red: #e5534b;
+  --blue: #4493f8;
+  --radius: 16px;
+  --shadow: 0 6px 24px rgba(0,0,0,.35);
+}
+* { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+html, body { margin: 0; padding: 0; }
+body {
+  background: var(--bg);
+  color: var(--ink);
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+  line-height: 1.45;
+  -webkit-font-smoothing: antialiased;
+}
+.wrap { max-width: 540px; margin: 0 auto; padding: 20px 16px 60px; }
+
+.brand { display: flex; align-items: center; gap: 12px; justify-content: center; margin: 8px 0 18px; }
+.brand .mark {
+  width: 44px; height: 44px; border-radius: 12px; background: var(--gold); color: var(--gold-ink);
+  display: grid; place-items: center; font-size: 24px; box-shadow: var(--shadow);
+}
+.brand h1 { font-size: 20px; margin: 0; letter-spacing: .3px; }
+.brand .sub { color: var(--muted); font-size: 12px; margin-top: 2px; }
+
+.card { background: var(--card); border: 1px solid var(--line); border-radius: var(--radius); padding: 18px; margin-bottom: 14px; box-shadow: var(--shadow); }
+.card h2 { margin: 0 0 12px; font-size: 16px; }
+
+label { display: block; font-size: 13px; color: var(--muted); margin: 14px 0 6px; font-weight: 600; }
+input, select {
+  width: 100%; padding: 14px; font-size: 16px; border-radius: 12px;
+  border: 1px solid var(--line); background: var(--card2); color: var(--ink); outline: none;
+}
+input:focus, select:focus { border-color: var(--gold); }
+
+.row { display: flex; gap: 10px; }
+.row > * { flex: 1; }
+
+.seg { display: flex; gap: 8px; margin-top: 6px; }
+.seg button {
+  flex: 1; padding: 14px; border-radius: 12px; border: 1px solid var(--line);
+  background: var(--card2); color: var(--ink); font-size: 15px; font-weight: 600; cursor: pointer;
+}
+.seg button.active { background: var(--gold); color: var(--gold-ink); border-color: var(--gold); }
+
+.stepper { display: flex; align-items: center; gap: 12px; }
+.stepper button { width: 52px; height: 52px; font-size: 26px; border-radius: 12px; border: 1px solid var(--line); background: var(--card2); color: var(--ink); cursor: pointer; }
+.stepper .val { flex: 1; text-align: center; font-size: 28px; font-weight: 700; }
+
+.btn {
+  display: block; width: 100%; padding: 16px; font-size: 17px; font-weight: 700;
+  border-radius: 14px; border: none; cursor: pointer; margin-top: 18px;
+  background: var(--gold); color: var(--gold-ink);
+}
+.btn:disabled { opacity: .5; }
+.btn.secondary { background: var(--card2); color: var(--ink); border: 1px solid var(--line); }
+.btn.danger { background: transparent; color: var(--red); border: 1px solid var(--red); }
+.btn.green { background: var(--green); color: #04210a; }
+
+.big-num { font-size: 64px; font-weight: 800; text-align: center; line-height: 1; margin: 6px 0; }
+.center { text-align: center; }
+.muted { color: var(--muted); }
+.small { font-size: 13px; }
+.pill { display: inline-block; padding: 3px 10px; border-radius: 999px; font-size: 12px; font-weight: 700; }
+.pill.appt { background: rgba(68,147,248,.16); color: var(--blue); }
+.pill.walk { background: rgba(63,185,80,.16); color: var(--green); }
+.pill.chair { background: var(--gold); color: var(--gold-ink); }
+
+.msg { background: var(--card2); border-radius: 12px; padding: 12px 14px; margin-top: 12px; font-size: 14px; }
+.msg.positive { border-left: 3px solid var(--gold); }
+.msg.healthy { border-left: 3px solid var(--green); }
+
+.toast-host { position: fixed; left: 0; right: 0; bottom: 16px; display: flex; flex-direction: column; align-items: center; gap: 8px; z-index: 50; pointer-events: none; }
+.toast { background: #fff; color: #111; padding: 12px 16px; border-radius: 12px; box-shadow: var(--shadow); font-weight: 600; max-width: 90%; animation: pop .25s ease; }
+.toast.good { background: var(--green); color: #04210a; }
+.toast.warn { background: var(--gold); color: var(--gold-ink); }
+.toast.bad { background: var(--red); color: #fff; }
+@keyframes pop { from { transform: translateY(12px); opacity: 0; } }
+
+.qrow { display: flex; align-items: center; justify-content: space-between; padding: 12px 0; border-bottom: 1px solid var(--line); }
+.qrow:last-child { border-bottom: none; }
+.qrow .who { display: flex; flex-direction: column; }
+.qrow .who b { font-size: 16px; }
+.qrow .who span { font-size: 12px; color: var(--muted); }
+.qrow .acts { display: flex; gap: 6px; }
+.qrow .acts button { padding: 8px 10px; font-size: 13px; border-radius: 10px; border: 1px solid var(--line); background: var(--card2); color: var(--ink); cursor: pointer; font-weight: 600; }
+.qrow .acts button.go { background: var(--green); color: #04210a; border-color: var(--green); }
+.qrow .acts button.done { background: var(--gold); color: var(--gold-ink); border-color: var(--gold); }
+
+.grid2 { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+.stat { background: var(--card2); border-radius: 12px; padding: 14px; text-align: center; }
+.stat .n { font-size: 26px; font-weight: 800; }
+.stat .l { font-size: 12px; color: var(--muted); }
+
+.modal-host { position: fixed; inset: 0; background: rgba(0,0,0,.6); display: none; place-items: center; padding: 20px; z-index: 100; }
+.modal-host.show { display: grid; }
+.modal { background: var(--card); border: 1px solid var(--line); border-radius: var(--radius); padding: 22px; max-width: 420px; width: 100%; text-align: center; }
+.modal h3 { margin: 0 0 8px; }
+
+.tabs { display: flex; gap: 6px; margin-bottom: 12px; }
+.tabs button { flex: 1; padding: 10px; border-radius: 10px; border: 1px solid var(--line); background: var(--card2); color: var(--muted); font-weight: 700; cursor: pointer; font-size: 13px; }
+.tabs button.active { background: var(--card); color: var(--ink); border-color: var(--gold); }
+
+.bars { display: flex; align-items: flex-end; gap: 4px; height: 90px; margin-top: 10px; }
+.bars .b { flex: 1; background: var(--card2); border-radius: 4px 4px 0 0; position: relative; min-height: 2px; }
+.bars .b > i { position: absolute; bottom: 0; left: 0; right: 0; background: var(--gold); border-radius: 4px 4px 0 0; }
+.dim { color: var(--muted); font-size: 12px; }
+a { color: var(--gold); }

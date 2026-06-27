@@ -1,0 +1,234 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+<meta name="theme-color" content="#0f1115" />
+<title>Charrod — Barber Dashboard</title>
+<link rel="stylesheet" href="/style.css" />
+</head>
+<body>
+<div class="wrap">
+  <div class="brand">
+    <div class="mark">💈</div>
+    <div><h1>Charrod's Dashboard</h1><div class="sub" id="clock">—</div></div>
+  </div>
+
+  <!-- PIN gate -->
+  <div id="gate" class="card center">
+    <h2>Enter your PIN</h2>
+    <input id="pin" type="password" inputmode="numeric" placeholder="••••" style="text-align:center;letter-spacing:6px;font-size:24px" />
+    <button class="btn" id="loginBtn">Open dashboard</button>
+  </div>
+
+  <!-- Dashboard -->
+  <div id="dash" style="display:none">
+
+    <div class="card">
+      <div class="grid2">
+        <div class="stat"><div class="n" id="sWaiting">0</div><div class="l">people waiting</div></div>
+        <div class="stat"><div class="n" id="sDone">0</div><div class="l">cuts done today</div></div>
+      </div>
+      <div class="row" style="margin-top:12px">
+        <button class="btn" id="openBtn" style="margin-top:0">Open</button>
+        <button class="btn secondary" id="addBtn" style="margin-top:0">+ Add client</button>
+      </div>
+      <div class="row" style="margin-top:10px">
+        <input id="cutoff" type="time" />
+        <button class="btn secondary" id="cutoffBtn" style="margin-top:0;flex:0 0 auto;width:auto;padding:14px 16px">Set last call</button>
+      </div>
+      <p class="small muted" id="cutoffLabel" style="margin:8px 0 0"></p>
+    </div>
+
+    <div class="card">
+      <h2>The line</h2>
+      <div id="queue"><p class="muted small">Nobody in line yet.</p></div>
+    </div>
+
+    <div class="card">
+      <div class="row">
+        <button class="btn secondary" id="statsBtn" style="margin-top:0">📊 View stats</button>
+        <button class="btn secondary" id="qrBtn" style="margin-top:0" onclick="location.href='/qr'">📱 Show QR code</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- Add-client modal -->
+<div class="modal-host" id="addModal">
+  <div class="modal" style="text-align:left">
+    <h3>Add a client</h3>
+    <label>Name</label><input id="aName" placeholder="Name" />
+    <label>Phone <span class="muted small">(optional)</span></label><input id="aPhone" type="tel" placeholder="(optional)" />
+    <label>How many cuts?</label>
+    <div class="stepper"><button id="aMinus">–</button><div class="val" id="aParty">1</div><button id="aPlus">+</button></div>
+    <label>Service</label>
+    <select id="aService"><option value="haircut">Haircut</option><option value="beard">Beard</option><option value="haircut_beard">Haircut &amp; Beard</option><option value="lineup">Line-up</option></select>
+    <label>Walk-in or appt?</label>
+    <div class="seg" id="aKind"><button data-kind="walkin" class="active" type="button">Walk-in</button><button data-kind="appt" type="button">Appt</button></div>
+    <div id="aApptWrap" style="display:none"><label>Appt time (ET)</label><input id="aApptTime" type="time" /></div>
+    <button class="btn" id="aSave">Add to line</button>
+    <button class="btn secondary" id="aCancel">Close</button>
+  </div>
+</div>
+
+<!-- Break modal -->
+<div class="modal-host" id="breakModal">
+  <div class="modal">
+    <div style="font-size:42px">💧</div>
+    <h3>Take a quick break</h3>
+    <p id="breakText" class="muted"></p>
+    <button class="btn green" onclick="document.getElementById('breakModal').classList.remove('show')">Got it 👍</button>
+  </div>
+</div>
+
+<!-- Stats modal -->
+<div class="modal-host" id="statsModal">
+  <div class="modal" style="text-align:left;max-width:460px">
+    <h3>Stats</h3>
+    <div class="tabs" id="statTabs">
+      <button data-k="today" class="active">Today</button>
+      <button data-k="week">Week</button>
+      <button data-k="month">Month</button>
+      <button data-k="year">Year</button>
+    </div>
+    <div class="center"><div class="big-num" id="statCuts" style="font-size:46px">0</div><div class="dim">cuts</div></div>
+    <div id="statBreak" style="margin-top:14px"></div>
+    <div class="dim" style="margin-top:16px">Last 14 days</div>
+    <div class="bars" id="statBars"></div>
+    <button class="btn secondary" id="statsClose" style="margin-top:18px">Close</button>
+  </div>
+</div>
+
+<div class="toast-host" id="toasts"></div>
+<script src="/app.js"></script>
+<script>
+const $ = id => document.getElementById(id);
+let PIN = sessionStorage.getItem('charrod_pin') || '';
+let seenIds = new Set();
+let firstLoad = true;
+let aParty = 1, aKind = 'walkin';
+const SVC = { haircut:'Haircut', beard:'Beard', haircut_beard:'Haircut & Beard', lineup:'Line-up' };
+
+async function api(path, body) {
+  const r = await fetch(path, { method: body ? 'POST' : 'GET', headers: { 'Content-Type': 'application/json', 'x-barber-pin': PIN }, body: body ? JSON.stringify(body) : undefined });
+  if (r.status === 401) { sessionStorage.removeItem('charrod_pin'); location.reload(); return; }
+  return r.json();
+}
+
+$('loginBtn').onclick = async () => {
+  const pin = $('pin').value.trim();
+  const r = await fetch('/api/barber/login', { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ pin }) });
+  if (r.ok) { PIN = pin; sessionStorage.setItem('charrod_pin', pin); start(); }
+  else toast('Wrong PIN', 'bad');
+};
+$('pin').addEventListener('keydown', e => { if (e.key === 'Enter') $('loginBtn').click(); });
+
+function start() {
+  $('gate').style.display = 'none';
+  $('dash').style.display = 'block';
+  refresh();
+  setInterval(refresh, 4000);
+  setInterval(() => $('clock').textContent = new Date().toLocaleTimeString('en-US', { timeZone:'America/New_York', hour:'numeric', minute:'2-digit' }) + ' ET', 1000);
+}
+
+function row(e, idx) {
+  const pill = e.status === 'in_chair' ? '<span class="pill chair">In chair 💈</span>'
+    : e.kind === 'appt' ? `<span class="pill appt">Appt ${e.apptLabel}</span>`
+    : '<span class="pill walk">Walk-in</span>';
+  const sub = `${e.serviceLabel} · ${e.partySize} ${e.partySize>1?'cuts':'cut'}` + (e.status==='waiting' ? ` · ${e.ahead} ahead` : '') + (e.addedByBarber ? ' · added by you' : '');
+  let acts = '';
+  if (e.status === 'in_chair') {
+    acts = `<button class="done" onclick="done('${e.id}')">Done ✓</button>`;
+  } else {
+    acts = `<button class="go" onclick="startCut('${e.id}')">Start</button>`
+         + (e.kind==='appt' ? `<button onclick="noshow('${e.id}')">Not here</button>` : '')
+         + `<button onclick="remove('${e.id}')">✕</button>`;
+  }
+  return `<div class="qrow"><div class="who"><b>${esc(e.name)} ${pill}</b><span>${sub}</span></div><div class="acts">${acts}</div></div>`;
+}
+function esc(s){ return String(s).replace(/[<>&]/g, c => ({'<':'&lt;','>':'&gt;','&':'&amp;'}[c])); }
+
+async function refresh() {
+  const d = await api('/api/barber/queue');
+  if (!d) return;
+  $('sWaiting').textContent = d.stats.waitingCuts;
+  $('sDone').textContent = d.stats.doneToday;
+  $('openBtn').textContent = d.state.open ? 'Open ✓' : 'Closed';
+  $('openBtn').className = 'btn ' + (d.state.open ? 'green' : 'danger');
+  $('openBtn').style.marginTop = '0';
+  $('cutoffLabel').textContent = d.state.cutoffMin != null ? `Last call set for ${d.state.cutoffLabel}` : 'No last-call set.';
+
+  const q = d.queue;
+  $('queue').innerHTML = q.length ? q.map(row).join('') : '<p class="muted small">Nobody in line yet.</p>';
+
+  // new-client alert
+  const ids = new Set(q.map(e => e.id));
+  if (!firstLoad) {
+    for (const e of q) if (!seenIds.has(e.id)) { toast('New: ' + e.name + ' (' + e.serviceLabel + ')', 'good'); beep(); break; }
+  }
+  seenIds = ids;
+
+  // client-cancellation alert
+  for (const c of (d.cancelledRecently || [])) {
+    toast(c.name + ' cancelled their spot', 'warn');
+    api('/api/barber/ack-cancel', { id: c.id });
+  }
+  firstLoad = false;
+}
+
+window.startCut = async id => { const d = await api('/api/barber/start', { id }); if (d && d.message) toast(d.message, 'warn'); refresh(); };
+window.done = async id => {
+  const d = await api('/api/barber/done', { id });
+  if (d && d.breakMsg) { $('breakText').textContent = d.breakMsg; $('breakModal').classList.add('show'); }
+  refresh();
+};
+window.noshow = async id => { await api('/api/barber/noshow', { id }); refresh(); };
+window.remove = async id => { if (confirm('Remove this client?')) { await api('/api/barber/remove', { id }); refresh(); } };
+
+$('openBtn').onclick = async () => { const cur = $('openBtn').textContent.startsWith('Open'); await api('/api/barber/open', { open: !cur }); refresh(); };
+$('cutoffBtn').onclick = async () => { await api('/api/barber/cutoff', { cutoff: $('cutoff').value }); refresh(); toast('Last call updated', 'good'); };
+
+// Add-client modal
+$('addBtn').onclick = () => $('addModal').classList.add('show');
+$('aCancel').onclick = () => $('addModal').classList.remove('show');
+$('aMinus').onclick = () => { aParty = Math.max(1, aParty-1); $('aParty').textContent = aParty; };
+$('aPlus').onclick = () => { aParty = Math.min(10, aParty+1); $('aParty').textContent = aParty; };
+$('aKind').querySelectorAll('button').forEach(b => b.onclick = () => {
+  $('aKind').querySelectorAll('button').forEach(x => x.classList.remove('active'));
+  b.classList.add('active'); aKind = b.dataset.kind;
+  $('aApptWrap').style.display = aKind === 'appt' ? 'block' : 'none';
+});
+$('aSave').onclick = async () => {
+  const name = $('aName').value.trim();
+  if (!name) return toast('Enter a name', 'bad');
+  const body = { name, phone: $('aPhone').value.trim(), partySize: aParty, service: $('aService').value, kind: aKind };
+  if (aKind === 'appt') { if (!$('aApptTime').value) return toast('Pick appt time', 'bad'); body.apptTime = $('aApptTime').value; }
+  const d = await api('/api/barber/add', body);
+  if (d && d.ok) { toast('Added ' + name, 'good'); $('addModal').classList.remove('show'); $('aName').value=''; $('aPhone').value=''; aParty=1; $('aParty').textContent='1'; refresh(); }
+  else toast((d && d.error) || 'Could not add', 'bad');
+};
+
+// Stats modal
+let statData = null, statKey = 'today';
+$('statsBtn').onclick = async () => { statData = await api('/api/barber/stats'); renderStats(); $('statsModal').classList.add('show'); };
+$('statsClose').onclick = () => $('statsModal').classList.remove('show');
+$('statTabs').querySelectorAll('button').forEach(b => b.onclick = () => {
+  $('statTabs').querySelectorAll('button').forEach(x => x.classList.remove('active'));
+  b.classList.add('active'); statKey = b.dataset.k; renderStats();
+});
+function renderStats() {
+  if (!statData) return;
+  const bucket = statData[statKey];
+  $('statCuts').textContent = bucket.cuts;
+  $('statBreak').innerHTML = Object.keys(statData.services).map(k =>
+    `<div class="qrow"><div class="who"><b>${statData.services[k]}</b></div><div><b>${bucket.byService[k]||0}</b></div></div>`).join('');
+  const max = Math.max(1, ...statData.daily.map(d => d.cuts));
+  $('statBars').innerHTML = statData.daily.map(d =>
+    `<div class="b" title="${d.date}: ${d.cuts}"><i style="height:${Math.round(d.cuts/max*100)}%"></i></div>`).join('');
+}
+
+if (PIN) start();
+</script>
+</body>
+</html>

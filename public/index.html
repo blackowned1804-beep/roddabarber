@@ -126,11 +126,18 @@
 let party = 1, kind = 'walkin';
 const $ = id => document.getElementById(id);
 
-// On load: if Rod is closed, show the closed message instead of the form
-// (so nobody fills out the form only to be turned away).
-fetch('/api/state').then(r => r.json()).then(s => {
-  if (!s.open) { $('formCard').style.display = 'none'; $('closedCard').style.display = 'block'; }
-}).catch(() => {});
+// Show the form only when Rod is open; otherwise show the closed message.
+// Re-checks every time the app becomes visible (e.g. reopening the installed
+// app), so a reopened app never shows a stale open/closed state.
+function refreshOpenState() {
+  if ($('doneCard').style.display === 'block') return; // don't disturb a shown confirmation
+  fetch('/api/state', { cache: 'no-store' }).then(r => r.json()).then(s => {
+    $('formCard').style.display = s.open ? 'block' : 'none';
+    $('closedCard').style.display = s.open ? 'none' : 'block';
+  }).catch(() => {});
+}
+refreshOpenState();
+document.addEventListener('visibilitychange', () => { if (!document.hidden) refreshOpenState(); });
 
 $('minus').onclick = () => { party = Math.max(1, party - 1); $('party').textContent = party; };
 $('plus').onclick  = () => { party = Math.min(10, party + 1); $('party').textContent = party; };

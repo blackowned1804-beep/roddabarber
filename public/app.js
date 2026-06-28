@@ -3,46 +3,21 @@ if ('serviceWorker' in navigator) {
   navigator.serviceWorker.register('/sw.js').catch(() => {});
 }
 
-// "Add to Home Screen" nudge. Captures Android's install prompt early; falls
-// back to an instruction for iPhone (Safari has no install API). Only shows on
-// pages that include #installBanner (the customer pages), never when already
-// installed, and remembers a dismissal for 30 days.
+// "Add to Home Screen" nudge. Uses Android's native install prompt when the
+// browser offers it; otherwise (and on iPhone) shows manual instructions. The
+// buttons are ALWAYS wired, so "Add" can never be a silent dead button.
 let deferredInstall = null;
-window.addEventListener('beforeinstallprompt', (e) => {
-  e.preventDefault();
-  deferredInstall = e;
-  maybeShowInstallBanner('android');
-});
-function initInstallBanner() {
-  const banner = document.getElementById('installBanner');
-  if (!banner) return;
+function installGuardsPass() {
+  if (!document.getElementById('installBanner')) return false;
   const standalone = window.matchMedia('(display-mode: standalone)').matches || window.navigator.standalone === true;
-  if (standalone) return;                                   // already installed
+  if (standalone) return false;                              // already installed
   const dismissedAt = +localStorage.getItem('charrod_install_dismissed') || 0;
-  if (Date.now() - dismissedAt < 30 * 86400000) return;     // dismissed < 30 days ago
-
-  const ua = navigator.userAgent;
-  const isIOS = /iphone|ipad|ipod/i.test(ua) && !window.MSStream;
-  const isSafari = /safari/i.test(ua) && !/crios|fxios|edgios/i.test(ua);
-
-  document.getElementById('installClose').onclick = () => {
-    banner.classList.remove('show');
-    localStorage.setItem('charrod_install_dismissed', String(Date.now()));
-  };
-  document.getElementById('installBtn').onclick = async () => {
-    if (!deferredInstall) return;
-    deferredInstall.prompt();
-    await deferredInstall.userChoice;
-    deferredInstall = null;
-    banner.classList.remove('show');
-  };
-
-  if (deferredInstall) maybeShowInstallBanner('android');
-  else if (isIOS && isSafari) setTimeout(() => maybeShowInstallBanner('ios'), 1800);
+  if (Date.now() - dismissedAt < 30 * 86400000) return false; // dismissed < 30 days ago
+  return true;
 }
-function maybeShowInstallBanner(mode) {
+function showInstallBanner(mode) {
   const banner = document.getElementById('installBanner');
-  if (!banner) return;
+  if (!banner || !installGuardsPass()) return;
   const text = document.getElementById('installText');
   const btn = document.getElementById('installBtn');
   if (mode === 'ios') {
@@ -53,6 +28,37 @@ function maybeShowInstallBanner(mode) {
     btn.style.display = 'inline-block';
   }
   banner.classList.add('show');
+}
+window.addEventListener('beforeinstallprompt', (e) => { e.preventDefault(); deferredInstall = e; showInstallBanner('android'); });
+window.addEventListener('appinstalled', () => {
+  deferredInstall = null;
+  const b = document.getElementById('installBanner'); if (b) b.classList.remove('show');
+});
+function initInstallBanner() {
+  const banner = document.getElementById('installBanner');
+  if (!banner) return;
+  // Wire the buttons unconditionally so "Add" always does something.
+  document.getElementById('installClose').onclick = () => {
+    banner.classList.remove('show');
+    localStorage.setItem('charrod_install_dismissed', String(Date.now()));
+  };
+  document.getElementById('installBtn').onclick = async () => {
+    if (deferredInstall) {
+      try {
+        deferredInstall.prompt();
+        await deferredInstall.userChoice;
+        deferredInstall = null;
+        banner.classList.remove('show');
+        return;
+      } catch (_) { /* fall through to manual instructions */ }
+    }
+    toast('Open your browser menu (⋮ top-right, or Share) → “Add to Home screen”.', 'warn');
+  };
+  const ua = navigator.userAgent;
+  const isIOS = /iphone|ipad|ipod/i.test(ua) && !window.MSStream;
+  const isSafari = /safari/i.test(ua) && !/crios|fxios|edgios/i.test(ua);
+  if (deferredInstall) showInstallBanner('android');
+  else if (isIOS && isSafari) setTimeout(() => showInstallBanner('ios'), 1800);
 }
 if (document.readyState !== 'loading') initInstallBanner();
 else document.addEventListener('DOMContentLoaded', initInstallBanner);

@@ -214,9 +214,16 @@ const BARBER_BREAK = [
   "3 down. Quick break: stretch your back, shake out your arms.",
 ];
 // Motivational graphics shown on the client confirmation / live-spot screen.
+// Note: 'love-*' live in /messages/ and knicks in /img/messages/ (matches how
+// the files were uploaded). Paths are explicit so the rotation works as-is.
 const MESSAGE_IMAGES = [
-  'knicks', 'love-1', 'love-2', 'love-3', 'love-4', 'love-5',
-].map(n => `/img/messages/${n}.png`);
+  '/img/messages/knicks.png',
+  '/messages/love-1.png',
+  '/messages/love-2.png',
+  '/messages/love-3.png',
+  '/messages/love-4.png',
+  '/messages/love-5.png',
+];
 
 function pick(arr, seed) {
   const i = seed == null

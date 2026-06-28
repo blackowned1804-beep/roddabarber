@@ -11,8 +11,7 @@ function installGuardsPass() {
   if (!document.getElementById('installBanner')) return false;
   const standalone = window.matchMedia('(display-mode: standalone)').matches || window.navigator.standalone === true;
   if (standalone) return false;                              // already installed
-  const dismissedAt = +localStorage.getItem('charrod_install_dismissed') || 0;
-  if (Date.now() - dismissedAt < 30 * 86400000) return false; // dismissed < 30 days ago
+  if (sessionStorage.getItem('charrod_install_dismissed')) return false; // dismissed this visit
   return true;
 }
 function showInstallBanner(mode) {
@@ -40,7 +39,7 @@ function initInstallBanner() {
   // Wire the buttons unconditionally so "Add" always does something.
   document.getElementById('installClose').onclick = () => {
     banner.classList.remove('show');
-    localStorage.setItem('charrod_install_dismissed', String(Date.now()));
+    sessionStorage.setItem('charrod_install_dismissed', '1');
   };
   document.getElementById('installBtn').onclick = async () => {
     if (deferredInstall) {
@@ -57,8 +56,13 @@ function initInstallBanner() {
   const ua = navigator.userAgent;
   const isIOS = /iphone|ipad|ipod/i.test(ua) && !window.MSStream;
   const isSafari = /safari/i.test(ua) && !/crios|fxios|edgios/i.test(ua);
+  const isAndroid = /android/i.test(ua);
   if (deferredInstall) showInstallBanner('android');
-  else if (isIOS && isSafari) setTimeout(() => showInstallBanner('ios'), 1800);
+  else setTimeout(() => {
+    if (deferredInstall) return;                       // native prompt arrived & showed itself
+    if (isIOS && isSafari) showInstallBanner('ios');
+    else if (isAndroid) showInstallBanner('android');  // fallback: "Add" gives manual steps
+  }, 2500);
 }
 if (document.readyState !== 'loading') initInstallBanner();
 else document.addEventListener('DOMContentLoaded', initInstallBanner);

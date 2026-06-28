@@ -16,6 +16,7 @@ const fs = require('fs');
 const path = require('path');
 const crypto = require('crypto');
 const QRCode = require('qrcode');
+const webpush = require('web-push');
 
 const app = express();
 app.set('trust proxy', true);   // Render terminates TLS at a proxy; honor x-forwarded-proto so QR uses https
@@ -40,6 +41,8 @@ let db = {
     open: true,         // accepting new clients?
     cutoffMin: null,    // last-call time as minutes-since-midnight ET (null = none)
   },
+  pushSubs: [],         // web-push subscriptions (clients who want "Rod is open" alerts)
+  vapid: null,          // {publicKey, privateKey} — generated once, persisted
 };
 
 const DATABASE_URL = process.env.DATABASE_URL;
@@ -63,6 +66,8 @@ async function load() {
       const d = r.rows[0].data;
       db.entries = d.entries || [];
       db.state = d.state || { open: true, cutoffMin: null };
+      db.pushSubs = d.pushSubs || [];
+      db.vapid = d.vapid || null;
     }
     console.log(`Loaded ${db.entries.length} entries from Postgres.`);
   } else {
@@ -71,6 +76,8 @@ async function load() {
         const d = JSON.parse(fs.readFileSync(DATA_FILE, 'utf8'));
         db.entries = d.entries || [];
         db.state = d.state || { open: true, cutoffMin: null };
+        db.pushSubs = d.pushSubs || [];
+        db.vapid = d.vapid || null;
       }
     } catch (e) {
       console.error('Could not read data.json, starting fresh:', e.message);
@@ -84,7 +91,7 @@ function save() {
   saveTimer = setTimeout(doSave, 200);
 }
 async function doSave() {
-  const payload = JSON.stringify({ entries: db.entries, state: db.state });
+  const payload = JSON.stringify({ entries: db.entries, state: db.state, pushSubs: db.pushSubs, vapid: db.vapid });
   if (pool) {
     try {
       await pool.query(
@@ -98,6 +105,49 @@ async function doSave() {
     try { fs.writeFileSync(DATA_FILE, payload); }
     catch (e) { console.error('save failed:', e.message); }
   }
+}
+
+// ---------------------------------------------------------------------------
+// Web push ("Rod is open" alerts). VAPID keys come from env if set, otherwise
+// they're generated once and persisted so they survive restarts.
+// ---------------------------------------------------------------------------
+let pushReady = false;
+function ensureVapid() {
+  if (process.env.VAPID_PUBLIC_KEY && process.env.VAPID_PRIVATE_KEY) {
+    db.vapid = { publicKey: process.env.VAPID_PUBLIC_KEY, privateKey: process.env.VAPID_PRIVATE_KEY };
+  } else if (!db.vapid || !db.vapid.publicKey) {
+    db.vapid = webpush.generateVAPIDKeys();
+    save();
+    console.log('Generated new VAPID keys.');
+  }
+  try {
+    webpush.setVapidDetails('mailto:eisaaclegal1804@gmail.com', db.vapid.publicKey, db.vapid.privateKey);
+    pushReady = true;
+  } catch (e) {
+    console.error('VAPID setup failed:', e.message);
+  }
+}
+
+async function sendOpenPush() {
+  if (!pushReady || !db.pushSubs.length) return;
+  const payload = JSON.stringify({
+    title: '💈 Rod da Barber is OPEN',
+    body: "Come through — Rod's taking clients now.",
+    url: '/',
+  });
+  const dead = [];
+  await Promise.all(db.pushSubs.map(async (sub) => {
+    try {
+      await webpush.sendNotification(sub, payload);
+    } catch (e) {
+      if (e.statusCode === 404 || e.statusCode === 410) dead.push(sub.endpoint); // gone — drop it
+    }
+  }));
+  if (dead.length) {
+    db.pushSubs = db.pushSubs.filter((s) => !dead.includes(s.endpoint));
+    save();
+  }
+  console.log(`Sent "open" push to ${db.pushSubs.length} subscriber(s), dropped ${dead.length}.`);
 }
 
 // ---------------------------------------------------------------------------
@@ -492,9 +542,23 @@ app.post('/api/barber/remove', checkPin, (req, res) => {
 
 // Open / close for the day
 app.post('/api/barber/open', checkPin, (req, res) => {
+  const wasOpen = db.state.open;
   db.state.open = !!(req.body && req.body.open);
   save();
   res.json({ ok: true, open: db.state.open });
+  if (!wasOpen && db.state.open) sendOpenPush(); // closed -> open: notify subscribers
+});
+
+// --- Web push: client gets the public key, then registers a subscription ---
+app.get('/api/push/key', (_req, res) => res.type('text/plain').send((db.vapid && db.vapid.publicKey) || ''));
+app.post('/api/push/subscribe', (req, res) => {
+  const sub = req.body;
+  if (!sub || !sub.endpoint) return res.status(400).json({ error: 'bad_subscription' });
+  if (!db.pushSubs.some((s) => s.endpoint === sub.endpoint)) {
+    db.pushSubs.push(sub);
+    save();
+  }
+  res.json({ ok: true });
 });
 
 // Set / clear the daily cut-off (last call) in ET
@@ -589,6 +653,7 @@ app.get('/qr', (_req, res) => res.sendFile(path.join(__dirname, 'public', 'qr.ht
   } catch (e) {
     console.error('Initial load failed (starting with empty state):', e.message);
   }
+  ensureVapid();
   app.listen(PORT, () => {
     console.log(`Rod da Barber queue running on http://localhost:${PORT}`);
     console.log(`Storage: ${pool ? 'Postgres (persistent)' : 'local file'}`);

@@ -82,3 +82,51 @@ function beep() {
     o.start(); o.stop(ctx.currentTime + 0.36);
   } catch (e) {}
 }
+
+// "Notify me when Rod opens" — web push opt-in (only on pages with #openAlertsBtn).
+function urlBase64ToUint8Array(b64) {
+  const pad = '='.repeat((4 - b64.length % 4) % 4);
+  const s = (b64 + pad).replace(/-/g, '+').replace(/_/g, '/');
+  const raw = atob(s); const arr = new Uint8Array(raw.length);
+  for (let i = 0; i < raw.length; i++) arr[i] = raw.charCodeAt(i);
+  return arr;
+}
+function markAlertsOn(btn) {
+  btn.textContent = "🔔 Alerts on — we'll tell you when Rod opens";
+  btn.disabled = true; btn.classList.remove('secondary'); btn.classList.add('green');
+  btn.style.display = 'block';
+}
+async function initOpenAlerts() {
+  const btn = document.getElementById('openAlertsBtn');
+  if (!btn) return;
+  if (!('serviceWorker' in navigator) || !('PushManager' in window) || !('Notification' in window)) return;
+  try {
+    const reg = await navigator.serviceWorker.ready;
+    if (await reg.pushManager.getSubscription()) { markAlertsOn(btn); return; }
+  } catch (_) {}
+  if (Notification.permission === 'denied') {
+    btn.textContent = '🔔 Alerts blocked — enable in phone settings';
+    btn.disabled = true; btn.style.display = 'block'; return;
+  }
+  btn.textContent = '🔔 Notify me when Rod opens';
+  btn.style.display = 'block';
+  btn.onclick = async () => {
+    btn.disabled = true; btn.textContent = 'Setting up…';
+    try {
+      const perm = await Notification.requestPermission();
+      if (perm !== 'granted') { btn.disabled = false; btn.textContent = '🔔 Notify me when Rod opens'; return; }
+      const reg = await navigator.serviceWorker.ready;
+      const key = await fetch('/api/push/key').then(r => r.text());
+      if (!key) throw new Error('no key');
+      const sub = await reg.pushManager.subscribe({ userVisibleOnly: true, applicationServerKey: urlBase64ToUint8Array(key) });
+      await fetch('/api/push/subscribe', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(sub) });
+      markAlertsOn(btn);
+      toast("You're set! We'll alert you when Rod opens 🔔", 'good');
+    } catch (e) {
+      btn.disabled = false; btn.textContent = '🔔 Notify me when Rod opens';
+      toast('Couldn\'t turn on alerts. On iPhone, add the app to your home screen first.', 'bad');
+    }
+  };
+}
+if (document.readyState !== 'loading') initOpenAlerts();
+else document.addEventListener('DOMContentLoaded', initOpenAlerts);

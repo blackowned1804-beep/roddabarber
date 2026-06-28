@@ -165,8 +165,7 @@ const BARBER_BREAK = [
 ];
 // Motivational graphics shown on the client confirmation / live-spot screen.
 const MESSAGE_IMAGES = [
-  'knicks', 'patience', 'choose-peace', 'drink-water', 'growth',
-  'lead-with-love', 'love-over-hate', 'keep-moving-forward', 'protect-your-peace', 'stay-strong',
+  'knicks', 'love-1', 'love-2', 'love-3', 'love-4', 'love-5',
 ].map(n => `/img/messages/${n}.png`);
 
 function pick(arr, seed) {

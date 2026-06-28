@@ -131,8 +131,8 @@ function ensureVapid() {
 async function sendOpenPush() {
   if (!pushReady || !db.pushSubs.length) return;
   const payload = JSON.stringify({
-    title: '💈 Rod da Barber is OPEN',
-    body: "Come through — Rod's taking clients now.",
+    title: '💈 Rod da Barber is now open for business',
+    body: "Come on through — Rod's ready for you!",
     url: '/',
   });
   const dead = [];

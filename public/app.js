@@ -1,6 +1,6 @@
 // Register the service worker so the site is installable as a home-screen app.
 if ('serviceWorker' in navigator) {
-  navigator.serviceWorker.register('/sw.js').catch(() => {});
+  navigator.serviceWorker.register('/sw.js').then((reg) => { reg.update(); }).catch(() => {});
 }
 
 // "Add to Home Screen" nudge. Uses Android's native install prompt when the

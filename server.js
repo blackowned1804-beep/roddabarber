@@ -401,7 +401,10 @@ function makeEntry({ name, phone, partySize, service, kind, apptMin, addedByBarb
 }
 
 // Public open/closed state — so the join page can greet appropriately on load.
-app.get('/api/state', (_req, res) => res.json({ open: db.state.open, nowLabel: nowLabel() }));
+app.get('/api/state', (_req, res) => {
+  res.set('Cache-Control', 'no-store');
+  res.json({ open: db.state.open, nowLabel: nowLabel() });
+});
 
 // A client's live status
 app.get('/api/status', (req, res) => {

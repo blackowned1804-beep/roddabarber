@@ -323,7 +323,7 @@ app.post('/api/join', (req, res) => {
   const { name, phone, partySize, service, kind, apptTime } = req.body || {};
 
   if (!db.state.open) {
-    return res.status(403).json({ error: 'closed', message: 'Rod is not taking new clients right now. Please check back soon!' });
+    return res.status(403).json({ error: 'closed', message: "Rod's not in right now — turn on alerts and we'll let you know when he opens!" });
   }
   if (!name || !String(name).trim()) return res.status(400).json({ error: 'name required' });
   if (!SERVICES[service]) return res.status(400).json({ error: 'pick a service' });
@@ -399,6 +399,9 @@ function makeEntry({ name, phone, partySize, service, kind, apptMin, addedByBarb
     addedByBarber: !!addedByBarber,
   };
 }
+
+// Public open/closed state — so the join page can greet appropriately on load.
+app.get('/api/state', (_req, res) => res.json({ open: db.state.open, nowLabel: nowLabel() }));
 
 // A client's live status
 app.get('/api/status', (req, res) => {

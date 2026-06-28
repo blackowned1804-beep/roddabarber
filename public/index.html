@@ -24,6 +24,14 @@
 
   <div class="beta-note">🧪 <b>Beta version</b> — we're still testing. Sorry for any hiccups, and thanks for your patience!</div>
 
+  <!-- CLOSED (shown immediately if Rod isn't open) -->
+  <div id="closedCard" class="card center" style="display:none">
+    <div style="font-size:46px">💈</div>
+    <h2>Rod's not in right now</h2>
+    <p class="muted">Turn on alerts below and we'll let you know the moment he opens.</p>
+    <p class="small muted" style="margin-top:6px">Tip: add this to your home screen for one-tap access.</p>
+  </div>
+
   <!-- FORM -->
   <div id="formCard" class="card">
     <h2>Join the line</h2>
@@ -117,6 +125,12 @@
 <script>
 let party = 1, kind = 'walkin';
 const $ = id => document.getElementById(id);
+
+// On load: if Rod is closed, show the closed message instead of the form
+// (so nobody fills out the form only to be turned away).
+fetch('/api/state').then(r => r.json()).then(s => {
+  if (!s.open) { $('formCard').style.display = 'none'; $('closedCard').style.display = 'block'; }
+}).catch(() => {});
 
 $('minus').onclick = () => { party = Math.max(1, party - 1); $('party').textContent = party; };
 $('plus').onclick  = () => { party = Math.min(10, party + 1); $('party').textContent = party; };

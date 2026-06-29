@@ -44,6 +44,7 @@ let db = {
   pushSubs: [],         // web-push subscriptions (clients who want "Rod is open" alerts)
   barberSubs: [],       // Rod's own push subscriptions ("new client joined" alerts)
   vapid: null,          // {publicKey, privateKey} — generated once, persisted
+  healthTipIdx: 0,      // rotation pointer for Rod's "stay healthy" tip on each Open
 };
 
 const DATABASE_URL = process.env.DATABASE_URL;
@@ -70,6 +71,7 @@ async function load() {
       db.pushSubs = d.pushSubs || [];
       db.barberSubs = d.barberSubs || [];
       db.vapid = d.vapid || null;
+      db.healthTipIdx = d.healthTipIdx || 0;
     }
     console.log(`Loaded ${db.entries.length} entries from Postgres.`);
   } else {
@@ -81,6 +83,7 @@ async function load() {
         db.pushSubs = d.pushSubs || [];
         db.barberSubs = d.barberSubs || [];
         db.vapid = d.vapid || null;
+        db.healthTipIdx = d.healthTipIdx || 0;
       }
     } catch (e) {
       console.error('Could not read data.json, starting fresh:', e.message);
@@ -94,7 +97,7 @@ function save() {
   saveTimer = setTimeout(doSave, 200);
 }
 async function doSave() {
-  const payload = JSON.stringify({ entries: db.entries, state: db.state, pushSubs: db.pushSubs, barberSubs: db.barberSubs, vapid: db.vapid });
+  const payload = JSON.stringify({ entries: db.entries, state: db.state, pushSubs: db.pushSubs, barberSubs: db.barberSubs, vapid: db.vapid, healthTipIdx: db.healthTipIdx });
   if (pool) {
     try {
       await pool.query(
@@ -168,6 +171,51 @@ async function sendBarberPush(title, body) {
     db.barberSubs = db.barberSubs.filter((s) => !dead.includes(s.endpoint));
     save();
   }
+}
+
+// "Stay healthy, Rod" tips — one fires to Rod each time he opens the shop.
+// Kept in order and rotated via db.healthTipIdx so he sees a different one
+// every open and the cycle survives restarts.
+const HEALTH_TIPS = [
+  // Hydration & Nutrition
+  '💧 Drink a glass of water',
+  '🍎 Eat a healthy snack — fruit, nuts, or yogurt',
+  '🍵 Have some green tea',
+  '🍌 Eat a piece of fruit',
+  '🥥 Drink some coconut water',
+  // Movement & Exercise
+  '🚶 Go for a short walk',
+  '💆 Stretch your neck and shoulders',
+  '🏋️ Do 10 standing squats',
+  '🪜 Walk up and down the stairs',
+  '💪 Do some arm circles and wrist stretches',
+  '🌳 Take a 5-minute walk outside',
+  '🦵 Do some calf raises',
+  // Relaxation & Mental Health
+  '😮‍💨 Take 3 deep breaths',
+  '🧘 Practice a 2-minute meditation',
+  '😌 Close your eyes and relax for a minute',
+  '🎶 Listen to calming music for 3 minutes',
+  '🌬️ Step outside for some fresh air',
+  // Self-Care & Posture
+  '🧍 Fix your posture and stand up straight',
+  '👐 Massage your temples',
+  '🔄 Roll your shoulders back 10 times',
+  '🧼 Wash your hands and face',
+  '🧴 Apply lotion or sunscreen to exposed skin',
+  // General Wellness
+  '🥗 Have a healthy lunch if you haven\'t yet',
+  '📱 Text a friend or family member',
+  '✨ Set an intention for the rest of your day',
+];
+
+async function sendHealthTipPush() {
+  if (!pushReady || !db.barberSubs.length) return;
+  const idx = ((db.healthTipIdx || 0) % HEALTH_TIPS.length + HEALTH_TIPS.length) % HEALTH_TIPS.length;
+  const tip = HEALTH_TIPS[idx];
+  db.healthTipIdx = (idx + 1) % HEALTH_TIPS.length; // advance for next open
+  save();
+  await sendBarberPush('🌿 Take care of yourself, Rod', tip);
 }
 
 // ---------------------------------------------------------------------------
@@ -651,7 +699,10 @@ app.post('/api/barber/open', checkPin, (req, res) => {
   db.state.open = !!(req.body && req.body.open);
   save();
   res.json({ ok: true, open: db.state.open });
-  if (!wasOpen && db.state.open) sendOpenPush(); // closed -> open: notify subscribers
+  if (!wasOpen && db.state.open) {
+    sendOpenPush();        // closed -> open: notify waiting customers
+    sendHealthTipPush();   // and nudge Rod with a rotating health tip
+  }
 });
 
 // --- Web push: client gets the public key, then registers a subscription ---

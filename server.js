@@ -380,7 +380,7 @@ app.post('/api/join', (req, res) => {
     apptMin = parseApptTime(apptTime);
     if (apptMin == null) return res.status(400).json({ error: 'bad appt time', message: 'Please enter a valid appointment time.' });
     if (blockedByMyThursday(apptDate, apptMin)) {
-      return res.status(400).json({ error: 'rod_blocked', message: "Rod's booked around 4:15 PM on Thursdays — please pick a time before 4:00 PM or after 4:45 PM." });
+      return res.status(400).json({ error: 'rod_blocked', message: "Rod has a standing 4:15 PM appointment with Jason on Thursdays — please pick a time before 4:00 PM or after 4:45 PM." });
     }
   }
 
@@ -455,7 +455,7 @@ function apptWhenStr(e) {
   const t = minToLabel(e.apptMin);
   return e.apptDate ? `${dateLabel(e.apptDate)} at ${t}` : t;
 }
-// Rod's standing weekly slot ("My Thursday"): Thursday 4:15 PM. Block client
+// Rod's standing weekly appointment with Jason: Thursday 4:15 PM. Block client
 // appointments from 15 min before to 30 min after it (4:00–4:45 PM).
 const MY_THURSDAY = { weekday: 4, fromMin: 16 * 60, toMin: 16 * 60 + 45 };
 function blockedByMyThursday(dateStr, apptMin) {

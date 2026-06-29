@@ -42,6 +42,7 @@ let db = {
     cutoffMin: null,    // last-call time as minutes-since-midnight ET (null = none)
   },
   pushSubs: [],         // web-push subscriptions (clients who want "Rod is open" alerts)
+  barberSubs: [],       // Rod's own push subscriptions ("new client joined" alerts)
   vapid: null,          // {publicKey, privateKey} — generated once, persisted
 };
 
@@ -67,6 +68,7 @@ async function load() {
       db.entries = d.entries || [];
       db.state = d.state || { open: true, cutoffMin: null };
       db.pushSubs = d.pushSubs || [];
+      db.barberSubs = d.barberSubs || [];
       db.vapid = d.vapid || null;
     }
     console.log(`Loaded ${db.entries.length} entries from Postgres.`);
@@ -77,6 +79,7 @@ async function load() {
         db.entries = d.entries || [];
         db.state = d.state || { open: true, cutoffMin: null };
         db.pushSubs = d.pushSubs || [];
+        db.barberSubs = d.barberSubs || [];
         db.vapid = d.vapid || null;
       }
     } catch (e) {
@@ -91,7 +94,7 @@ function save() {
   saveTimer = setTimeout(doSave, 200);
 }
 async function doSave() {
-  const payload = JSON.stringify({ entries: db.entries, state: db.state, pushSubs: db.pushSubs, vapid: db.vapid });
+  const payload = JSON.stringify({ entries: db.entries, state: db.state, pushSubs: db.pushSubs, barberSubs: db.barberSubs, vapid: db.vapid });
   if (pool) {
     try {
       await pool.query(
@@ -148,6 +151,23 @@ async function sendOpenPush() {
     save();
   }
   console.log(`Sent "open" push to ${db.pushSubs.length} subscriber(s), dropped ${dead.length}.`);
+}
+
+async function sendBarberPush(title, body) {
+  if (!pushReady || !db.barberSubs.length) return;
+  const payload = JSON.stringify({ title, body, url: '/barber' });
+  const dead = [];
+  await Promise.all(db.barberSubs.map(async (sub) => {
+    try {
+      await webpush.sendNotification(sub, payload);
+    } catch (e) {
+      if (e.statusCode === 404 || e.statusCode === 410) dead.push(sub.endpoint);
+    }
+  }));
+  if (dead.length) {
+    db.barberSubs = db.barberSubs.filter((s) => !dead.includes(s.endpoint));
+    save();
+  }
 }
 
 // ---------------------------------------------------------------------------
@@ -355,6 +375,11 @@ app.post('/api/join', (req, res) => {
   const entry = makeEntry({ name, phone: cleanPhone, partySize: ps, service, kind: entryKind, apptMin, addedByBarber: false });
   db.entries.push(entry);
   save();
+
+  // Buzz Rod's phone (if he opted in) — works even with the dashboard closed.
+  const who = entry.partySize > 1 ? `${entry.name} (+${entry.partySize - 1})` : entry.name;
+  const how = entry.kind === 'appt' ? `appt ${minToLabel(entry.apptMin)}` : 'walk-in';
+  sendBarberPush('💈 New client joined', `${who} · ${SERVICES[entry.service]} · ${how}`);
 
   res.json({
     ok: true,
@@ -569,6 +594,17 @@ app.post('/api/push/subscribe', (req, res) => {
   if (!sub || !sub.endpoint) return res.status(400).json({ error: 'bad_subscription' });
   if (!db.pushSubs.some((s) => s.endpoint === sub.endpoint)) {
     db.pushSubs.push(sub);
+    save();
+  }
+  res.json({ ok: true });
+});
+
+// Rod's own "new client joined" alerts (PIN-gated — only the barber subscribes).
+app.post('/api/barber/push-subscribe', checkPin, (req, res) => {
+  const sub = req.body;
+  if (!sub || !sub.endpoint) return res.status(400).json({ error: 'bad_subscription' });
+  if (!db.barberSubs.some((s) => s.endpoint === sub.endpoint)) {
+    db.barberSubs.push(sub);
     save();
   }
   res.json({ ok: true });

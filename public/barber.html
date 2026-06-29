@@ -55,7 +55,8 @@
     </div>
 
     <div class="card">
-      <div class="row">
+      <button class="btn secondary" id="barberAlertsBtn" style="margin-top:0;width:100%">🔔 Alert me when someone joins</button>
+      <div class="row" style="margin-top:10px">
         <button class="btn secondary" id="statsBtn" style="margin-top:0">📊 View stats</button>
         <button class="btn secondary" id="qrBtn" style="margin-top:0" onclick="location.href='/qr'">📱 Show QR code</button>
       </div>
@@ -144,6 +145,36 @@ function start() {
   refresh();
   setInterval(refresh, 4000);
   setInterval(() => $('clock').textContent = new Date().toLocaleTimeString('en-US', { timeZone:'America/New_York', hour:'numeric', minute:'2-digit' }) + ' ET', 1000);
+  initBarberAlerts();
+}
+
+// Rod opts in to a push when a client joins (works with the dashboard closed).
+async function initBarberAlerts() {
+  const btn = $('barberAlertsBtn');
+  if (!btn) return;
+  if (!('serviceWorker' in navigator) || !('PushManager' in window) || !('Notification' in window)) { btn.style.display = 'none'; return; }
+  try {
+    const reg = await navigator.serviceWorker.ready;
+    if (await reg.pushManager.getSubscription() && localStorage.getItem('charrod_barber_alerts')) {
+      btn.textContent = '🔔 Job alerts ON ✓'; btn.classList.add('green'); btn.disabled = true; return;
+    }
+  } catch (_) {}
+  if (Notification.permission === 'denied') { btn.textContent = '🔔 Alerts blocked — enable in phone settings'; btn.disabled = true; return; }
+  btn.onclick = async () => {
+    const orig = btn.textContent; btn.disabled = true; btn.textContent = 'Setting up…';
+    try {
+      if (await Notification.requestPermission() !== 'granted') { btn.disabled = false; btn.textContent = orig; return; }
+      const reg = await navigator.serviceWorker.ready;
+      const key = await fetch('/api/push/key').then(r => r.text());
+      const sub = await reg.pushManager.subscribe({ userVisibleOnly: true, applicationServerKey: urlBase64ToUint8Array(key) });
+      const r = await api('/api/barber/push-subscribe', sub);
+      if (r && r.ok) { localStorage.setItem('charrod_barber_alerts', '1'); btn.textContent = '🔔 Job alerts ON ✓'; btn.classList.add('green'); btn.disabled = true; }
+      else { btn.disabled = false; btn.textContent = orig; toast('Could not turn on alerts', 'bad'); }
+    } catch (e) {
+      btn.disabled = false; btn.textContent = orig;
+      toast("Couldn't turn on alerts. On iPhone, add the dashboard to your home screen first.", 'bad');
+    }
+  };
 }
 
 function row(e, idx) {

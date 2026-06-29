@@ -363,6 +363,7 @@ app.post('/api/join', (req, res) => {
   if (!db.state.open) {
     return res.status(403).json({ error: 'closed', message: "Rod's not in right now — turn on alerts and we'll let you know when he opens!" });
   }
+  ensureStandingAppt(); // so walk-ins on Thursdays see Jason's 4:15 in their count
   if (!name || !String(name).trim()) return res.status(400).json({ error: 'name required' });
   if (!SERVICES[service]) return res.status(400).json({ error: 'pick a service' });
   // Phone is optional for now (no SMS yet) — kept for Phase 2 texting.
@@ -458,8 +459,20 @@ function apptWhenStr(e) {
 // Rod's standing weekly appointment with Jason: Thursday 4:15 PM. Block client
 // appointments from 15 min before to 30 min after it (4:00–4:45 PM).
 const MY_THURSDAY = { weekday: 4, fromMin: 16 * 60, toMin: 16 * 60 + 45 };
+const STANDING_JASON = { name: 'Jason', service: 'haircut', apptMin: 16 * 60 + 15 }; // Thursday 4:15 PM
 function blockedByMyThursday(dateStr, apptMin) {
   return weekdayOf(dateStr) === MY_THURSDAY.weekday && apptMin >= MY_THURSDAY.fromMin && apptMin <= MY_THURSDAY.toMin;
+}
+// On Thursdays, make sure Jason's standing 4:15 appointment exists for today, so
+// Rod sees it in his line (created once per Thursday; not recreated if removed).
+function ensureStandingAppt() {
+  const today = etDateStr();
+  if (weekdayOf(today) !== MY_THURSDAY.weekday) return;
+  if (db.entries.some(e => e.standing && e.date === today)) return;
+  const e = makeEntry({ name: STANDING_JASON.name, phone: '', partySize: 1, service: STANDING_JASON.service, kind: 'appt', apptMin: STANDING_JASON.apptMin, apptDate: today, addedByBarber: false });
+  e.standing = true;
+  db.entries.push(e);
+  save();
 }
 
 function makeEntry({ name, phone, partySize, service, kind, apptMin, apptDate, addedByBarber }) {
@@ -530,6 +543,7 @@ app.post('/api/barber/login', (req, res) => {
 });
 
 app.get('/api/barber/queue', checkPin, (req, res) => {
+  ensureStandingAppt();
   const ordered = orderedActive().map(publicEntry);
   // attach running "people ahead" for display
   let ahead = 0;
@@ -756,6 +770,7 @@ app.get('/qr', (_req, res) => res.sendFile(path.join(__dirname, 'public', 'qr.ht
     console.error('Initial load failed (starting with empty state):', e.message);
   }
   ensureVapid();
+  ensureStandingAppt();
   app.listen(PORT, () => {
     console.log(`Rod da Barber queue running on http://localhost:${PORT}`);
     console.log(`Storage: ${pool ? 'Postgres (persistent)' : 'local file'}`);

@@ -54,6 +54,11 @@
       <div id="queue"><p class="muted small">Nobody in line yet.</p></div>
     </div>
 
+    <div class="card" id="upcomingCard" style="display:none">
+      <h2>Upcoming appointments</h2>
+      <div id="upcomingList"></div>
+    </div>
+
     <div class="card">
       <button class="btn secondary" id="barberAlertsBtn" style="margin-top:0;width:100%">🔔 Alert me when someone joins</button>
       <div class="row" style="margin-top:10px">
@@ -230,6 +235,14 @@ async function refresh() {
   lastConflictSig = sig;
 
   $('queue').innerHTML = q.length ? q.map(row).join('') : '<p class="muted small">Nobody in line yet.</p>';
+
+  // upcoming (future-dated) appointments
+  const up = d.upcoming || [];
+  $('upcomingCard').style.display = up.length ? 'block' : 'none';
+  $('upcomingList').innerHTML = up.map(a => `<div class="qrow">
+    <div class="who"><b>${esc(a.name)} <span class="pill appt">${a.dateLabel} · ${a.apptLabel}</span></b>
+    <span>${a.serviceLabel}${a.partySize>1?' · '+a.partySize+' cuts':''}</span></div>
+    <div class="acts"><button onclick="remove('${a.id}')">✕</button></div></div>`).join('');
 
   // new-client alert
   const ids = new Set(q.map(e => e.id));

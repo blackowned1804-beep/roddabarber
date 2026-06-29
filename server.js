@@ -331,7 +331,9 @@ function publicEntry(e) {
     serviceLabel: SERVICES[e.service] || e.service,
     kind: e.kind,
     apptMin: e.apptMin,
+    apptDate: e.apptDate || null,
     apptLabel: e.apptMin != null ? minToLabel(e.apptMin) : null,
+    apptDateLabel: e.apptDate ? dateLabel(e.apptDate) : null,
     status: e.status,
     createdMin: e.createdMin,
     createdLabel: minToLabel(e.createdMin),
@@ -343,11 +345,20 @@ function doneToday() {
   return todaysEntries().filter(e => e.status === 'done');
 }
 
+// Future-dated appointments still pending — so Rod can see what's booked ahead.
+function upcomingAppts() {
+  const today = etDateStr();
+  return db.entries
+    .filter(e => e.kind === 'appt' && e.status === 'waiting' && e.apptDate && e.apptDate > today)
+    .sort((a, b) => (a.apptDate + String(a.apptMin).padStart(4, '0')).localeCompare(b.apptDate + String(b.apptMin).padStart(4, '0')))
+    .map(e => ({ id: e.id, name: e.name, dateLabel: dateLabel(e.apptDate), apptLabel: minToLabel(e.apptMin), serviceLabel: SERVICES[e.service] || e.service, partySize: e.partySize }));
+}
+
 // ---------------------------------------------------------------------------
 // Client API
 // ---------------------------------------------------------------------------
 app.post('/api/join', (req, res) => {
-  const { name, phone, partySize, service, kind, apptTime } = req.body || {};
+  const { name, phone, partySize, service, kind, apptTime, apptDate: apptDateRaw } = req.body || {};
 
   if (!db.state.open) {
     return res.status(403).json({ error: 'closed', message: "Rod's not in right now — turn on alerts and we'll let you know when he opens!" });
@@ -362,9 +373,15 @@ app.post('/api/join', (req, res) => {
 
   let entryKind = kind === 'appt' ? 'appt' : 'walkin';
   let apptMin = null;
+  let apptDate = null;
   if (entryKind === 'appt') {
+    apptDate = parseApptDate(apptDateRaw);
+    if (!apptDate) return res.status(400).json({ error: 'bad_date', message: 'Please pick a valid appointment date (today or later).' });
     apptMin = parseApptTime(apptTime);
     if (apptMin == null) return res.status(400).json({ error: 'bad appt time', message: 'Please enter a valid appointment time.' });
+    if (blockedByMyThursday(apptDate, apptMin)) {
+      return res.status(400).json({ error: 'rod_blocked', message: "Rod's booked around 4:15 PM on Thursdays — please pick a time before 4:00 PM or after 4:45 PM." });
+    }
   }
 
   // Cut-off applies to new walk-ins joining after last call.
@@ -372,7 +389,7 @@ app.post('/api/join', (req, res) => {
     return res.status(403).json({ error: 'past_cutoff', message: `Last call for walk-ins today was ${minToLabel(db.state.cutoffMin)}. See you next time!` });
   }
 
-  const entry = makeEntry({ name, phone: cleanPhone, partySize: ps, service, kind: entryKind, apptMin, addedByBarber: false });
+  const entry = makeEntry({ name, phone: cleanPhone, partySize: ps, service, kind: entryKind, apptMin, apptDate, addedByBarber: false });
   db.entries.push(entry);
   save();
 
@@ -387,7 +404,7 @@ app.post('/api/join', (req, res) => {
     kind: entry.kind,
     walkAhead: entry.kind === 'walkin' ? walkInsAheadCuts(entry) : 0,
     apptsAhead: entry.kind === 'walkin' ? pendingApptList() : [],
-    apptLabel: entry.kind === 'appt' ? minToLabel(entry.apptMin) : null,
+    apptLabel: entry.kind === 'appt' ? apptWhenStr(entry) : null,
     positiveImg: pick(MESSAGE_IMAGES, seedFrom(entry.id)),
     nowLabel: nowLabel(),
   });
@@ -413,7 +430,39 @@ function parseApptTime(t) {
   return null;
 }
 
-function makeEntry({ name, phone, partySize, service, kind, apptMin, addedByBarber }) {
+// Appointment date "YYYY-MM-DD" — must be valid, today-or-future, within ~120 days.
+function parseApptDate(s) {
+  if (!s) return null;
+  const m = String(s).trim().match(/^(\d{4})-(\d{2})-(\d{2})$/);
+  if (!m) return null;
+  const y = +m[1], mo = +m[2], d = +m[3];
+  const dt = new Date(Date.UTC(y, mo - 1, d));
+  if (dt.getUTCFullYear() !== y || dt.getUTCMonth() !== mo - 1 || dt.getUTCDate() !== d) return null;
+  if (m[0] < etDateStr()) return null;                                    // no past dates
+  if (m[0] > etDateStr(new Date(Date.now() + 120 * 86400000))) return null; // not too far out
+  return m[0];
+}
+function weekdayOf(dateStr) {
+  const [y, mo, d] = dateStr.split('-').map(Number);
+  return new Date(Date.UTC(y, mo - 1, d)).getUTCDay(); // 0=Sun .. 6=Sat
+}
+function dateLabel(dateStr) {
+  const [y, mo, d] = dateStr.split('-').map(Number);
+  return new Date(Date.UTC(y, mo - 1, d)).toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric', timeZone: 'UTC' });
+}
+function apptWhenStr(e) {
+  if (e.apptMin == null) return null;
+  const t = minToLabel(e.apptMin);
+  return e.apptDate ? `${dateLabel(e.apptDate)} at ${t}` : t;
+}
+// Rod's standing weekly slot ("My Thursday"): Thursday 4:15 PM. Block client
+// appointments from 15 min before to 30 min after it (4:00–4:45 PM).
+const MY_THURSDAY = { weekday: 4, fromMin: 16 * 60, toMin: 16 * 60 + 45 };
+function blockedByMyThursday(dateStr, apptMin) {
+  return weekdayOf(dateStr) === MY_THURSDAY.weekday && apptMin >= MY_THURSDAY.fromMin && apptMin <= MY_THURSDAY.toMin;
+}
+
+function makeEntry({ name, phone, partySize, service, kind, apptMin, apptDate, addedByBarber }) {
   return {
     id: crypto.randomBytes(6).toString('hex'),
     name: String(name).trim().slice(0, 60),
@@ -422,8 +471,9 @@ function makeEntry({ name, phone, partySize, service, kind, apptMin, addedByBarb
     service,
     kind,
     apptMin: apptMin ?? null,
+    apptDate: apptDate ?? null,
     status: 'waiting',
-    date: etDateStr(),
+    date: apptDate || etDateStr(),   // appointments file under their date; walk-ins under today
     createdMin: etMinutesNow(),
     createdAtMs: Date.now(),
     startedAtMs: null,
@@ -448,7 +498,7 @@ app.get('/api/status', (req, res) => {
     kind: e.kind,
     walkAhead: active && e.kind === 'walkin' ? walkInsAheadCuts(e) : 0,
     apptsAhead: active && e.kind === 'walkin' ? pendingApptList() : [],
-    apptLabel: e.kind === 'appt' ? minToLabel(e.apptMin) : null,
+    apptLabel: e.kind === 'appt' ? apptWhenStr(e) : null,
     nowLabel: nowLabel(),
     positiveImg: pick(MESSAGE_IMAGES, seedFrom(e.id)),
   });
@@ -497,6 +547,7 @@ app.get('/api/barber/queue', checkPin, (req, res) => {
     cancelledRecently: todaysEntries()
       .filter(e => e.status === 'cancelled' && e.cancelledByClient && !e.barberSawCancel)
       .map(publicEntry),
+    upcoming: upcomingAppts(),
     nowLabel: nowLabel(),
   });
 });
@@ -568,9 +619,11 @@ app.post('/api/barber/noshow', checkPin, (req, res) => {
   res.json({ ok: true });
 });
 
-// Barber removes someone (cancel on their behalf)
+// Barber removes someone (cancel on their behalf) — works for today's line AND
+// future-dated upcoming appointments.
 app.post('/api/barber/remove', checkPin, (req, res) => {
-  const target = activeEntries().find(e => e.id === (req.body && req.body.id));
+  const id = req.body && req.body.id;
+  const target = db.entries.find(e => e.id === id && (e.status === 'waiting' || e.status === 'in_chair'));
   if (!target) return res.status(404).json({ error: 'not_found' });
   target.status = 'cancelled';
   target.finishedAtMs = Date.now();

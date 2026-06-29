@@ -65,9 +65,11 @@
     <p class="small muted" style="margin-top:6px">Appointments must be arranged with Rod first (call or text).</p>
 
     <div id="apptWrap" style="display:none">
-      <label>Your confirmed time (Eastern)</label>
+      <label>Your confirmed date</label>
+      <input id="apptDate" type="date" />
+      <label style="margin-top:12px">Your confirmed time (Eastern)</label>
       <input id="apptTime" type="time" />
-      <p class="small" style="color:var(--gold);margin-top:8px">⚠️ Only enter the exact time you already agreed on with Rod.</p>
+      <p class="small" style="color:var(--gold);margin-top:8px">⚠️ Only enter the exact day &amp; time you already agreed on with Rod.</p>
     </div>
 
     <button class="btn" id="submit">Get in line</button>
@@ -87,7 +89,7 @@
     <!-- Appointment variant -->
     <div id="doneAppt" style="display:none">
       <h2>Thank you! 🙏</h2>
-      <p class="muted">Your appointment is set for<br><span class="big-num" id="apptTimeLabel" style="font-size:40px"></span></p>
+      <p class="muted">Your appointment is set for<br><span id="apptTimeLabel" style="font-size:24px;font-weight:800;color:var(--ink)"></span></p>
       <p style="margin-top:6px">If you confirmed this time with Rod, he’ll get you in as close to it as he can.</p>
       <p class="small muted" style="margin-top:8px">Didn’t actually agree on a time with Rod? Your spot may not be honored — come back and choose <b>Walk-in</b>.</p>
     </div>
@@ -158,7 +160,15 @@ $('apptNo').onclick  = () => { $('apptModal').classList.remove('show'); selectKi
 // Clear any lingering error toast the moment they fix the field it was about.
 function clearToasts() { document.querySelectorAll('#toasts .toast').forEach(t => t.remove()); }
 $('apptTime').addEventListener('input', clearToasts);
+$('apptDate').addEventListener('input', clearToasts);
 $('name').addEventListener('input', clearToasts);
+
+// Default/min the appointment date to today (Eastern).
+(function () {
+  const et = new Date().toLocaleDateString('en-CA', { timeZone: 'America/New_York' }); // YYYY-MM-DD
+  $('apptDate').min = et;
+  $('apptDate').value = et;
+})();
 
 // Show a walk-in the day's pending appointments so they know one may be slotted in.
 function renderApptsAhead(box, list) {
@@ -175,7 +185,9 @@ $('submit').onclick = async () => {
   if (!name) return toast('Please enter your name', 'bad');
   const body = { name, phone, partySize: party, service: $('service').value, kind };
   if (kind === 'appt') {
+    if (!$('apptDate').value) return toast('Please pick your appointment date', 'bad');
     if (!$('apptTime').value) return toast('Please pick your appointment time', 'bad');
+    body.apptDate = $('apptDate').value;
     body.apptTime = $('apptTime').value;
   }
   $('submit').disabled = true;

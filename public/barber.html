@@ -61,6 +61,7 @@
 
     <div class="card">
       <button class="btn secondary" id="barberAlertsBtn" style="margin-top:0;width:100%">🔔 Alert me when someone joins</button>
+      <button class="btn secondary" id="testSoundBtn" style="margin-top:10px;width:100%">🔊 Test sound</button>
       <div class="row" style="margin-top:10px">
         <button class="btn secondary" id="statsBtn" style="margin-top:0">📊 View stats</button>
         <button class="btn secondary" id="qrBtn" style="margin-top:0" onclick="location.href='/qr'">📱 Show QR code</button>
@@ -293,6 +294,7 @@ $('aSave').onclick = async () => {
 
 // Stats modal
 let statData = null, statKey = 'today';
+$('testSoundBtn').onclick = () => { loudAlert(); toast("🔊 That's the new-client alert. If it's quiet, turn your volume up.", 'good'); };
 $('statsBtn').onclick = async () => { statData = await api('/api/barber/stats'); renderStats(); $('statsModal').classList.add('show'); };
 $('statsClose').onclick = () => $('statsModal').classList.remove('show');
 $('statTabs').querySelectorAll('button').forEach(b => b.onclick = () => {

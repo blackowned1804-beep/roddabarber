@@ -78,19 +78,49 @@ function toast(text, kind) {
   setTimeout(() => { t.style.opacity = '0'; t.style.transition = 'opacity .4s'; }, 3200);
   setTimeout(() => t.remove(), 3700);
 }
-function beep() {
+// One shared audio engine, reused for every sound. (Creating a new one per
+// beep leaks contexts and hits the browser's ~6-context cap on a busy day.)
+// It starts "suspended" on mobile until a user gesture, so we resume it on the
+// first tap/keypress — by the time a client joins, Rod has already tapped in.
+let _audioCtx = null;
+function getAudioCtx() {
+  const Ctx = window.AudioContext || window.webkitAudioContext;
+  if (!Ctx) return null;
+  if (!_audioCtx) _audioCtx = new Ctx();
+  if (_audioCtx.state === 'suspended') _audioCtx.resume();
+  return _audioCtx;
+}
+['pointerdown', 'keydown', 'touchstart'].forEach((ev) =>
+  window.addEventListener(ev, () => { getAudioCtx(); }, { passive: true })
+);
+
+// Play a sequence of tones. vol 0..1; each tone lasts `step` seconds.
+function _playTones(freqs, step, vol, type) {
   try {
-    const Ctx = window.AudioContext || window.webkitAudioContext;
-    if (!Ctx) return;
-    const ctx = new Ctx();
-    const o = ctx.createOscillator(), g = ctx.createGain();
-    o.connect(g); g.connect(ctx.destination);
-    o.type = 'sine'; o.frequency.value = 660;
-    g.gain.setValueAtTime(0.0001, ctx.currentTime);
-    g.gain.exponentialRampToValueAtTime(0.2, ctx.currentTime + 0.02);
-    g.gain.exponentialRampToValueAtTime(0.0001, ctx.currentTime + 0.35);
-    o.start(); o.stop(ctx.currentTime + 0.36);
+    const ctx = getAudioCtx();
+    if (!ctx) return;
+    let t = ctx.currentTime + 0.01;
+    for (const f of freqs) {
+      const o = ctx.createOscillator(), g = ctx.createGain();
+      o.connect(g); g.connect(ctx.destination);
+      o.type = type || 'sine'; o.frequency.value = f;
+      g.gain.setValueAtTime(0.0001, t);
+      g.gain.exponentialRampToValueAtTime(vol, t + 0.02);
+      g.gain.exponentialRampToValueAtTime(0.0001, t + step * 0.92);
+      o.start(t); o.stop(t + step);
+      t += step;
+    }
   } catch (e) {}
+}
+
+// Gentle single chirp — used on the customer live-spot page.
+function beep() { _playTones([660], 0.35, 0.2, 'sine'); }
+
+// Loud, repeating alarm — used on Rod's dashboard for new clients / clashes.
+// Rising 3-tone ring played twice, near-max volume, square wave so it cuts
+// through clippers and shop music even with the phone in his pocket area.
+function loudAlert() {
+  _playTones([784, 988, 1319, 784, 988, 1319, 1319], 0.16, 0.85, 'square');
 }
 
 // "Notify me when Rod opens" — web push opt-in (only on pages with #openAlertsBtn).

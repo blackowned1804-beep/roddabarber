@@ -231,7 +231,7 @@ async function refresh() {
     $('conflictBanner').style.display = 'none';
   }
   const sig = clashing.map(a => a.id).join(',');
-  if (clashing.length && sig !== lastConflictSig) { toast('⚠ Appointment clash — two appointments within 15 min!', 'bad'); beep(); }
+  if (clashing.length && sig !== lastConflictSig) { toast('⚠ Appointment clash — two appointments within 15 min!', 'bad'); loudAlert(); }
   lastConflictSig = sig;
 
   $('queue').innerHTML = q.length ? q.map(row).join('') : '<p class="muted small">Nobody in line yet.</p>';
@@ -247,7 +247,7 @@ async function refresh() {
   // new-client alert
   const ids = new Set(q.map(e => e.id));
   if (!firstLoad) {
-    for (const e of q) if (!seenIds.has(e.id)) { toast('New: ' + e.name + ' (' + e.serviceLabel + ')', 'good'); beep(); break; }
+    for (const e of q) if (!seenIds.has(e.id)) { toast('New: ' + e.name + ' (' + e.serviceLabel + ')', 'good'); loudAlert(); break; }
   }
   seenIds = ids;
 

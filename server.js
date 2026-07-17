@@ -218,6 +218,52 @@ async function sendHealthTipPush() {
   await sendBarberPush('🌿 Take care of yourself, Rod', tip);
 }
 
+// --- Per-client "you moved up" push -----------------------------------------
+// Each waiting client can attach their own push subscription to their entry, so
+// we can buzz just them when their position improves. entry.lastNotifiedAhead
+// records the last count we told them, so we only push on an actual decrease.
+async function sendSpotPush(entry, title, body, url) {
+  if (!pushReady || !entry || !entry.pushSub) return;
+  const payload = JSON.stringify({ title, body, url: url || ('/status?id=' + entry.id) });
+  try {
+    await webpush.sendNotification(entry.pushSub, payload);
+  } catch (e) {
+    if (e.statusCode === 404 || e.statusCode === 410) { entry.pushSub = null; save(); } // gone
+  }
+}
+
+// Buzz the person Rod just seated.
+function notifyStarted(entry) {
+  sendSpotPush(entry, "💈 You're up!", "Head to Rod's chair now — it's your turn.");
+}
+
+// After any change to the line, push each waiting walk-in who moved closer.
+// (Appointments show a time, not a live position, so they only get the
+// "you're up" buzz when Rod seats them — handled by notifyStarted.)
+function notifyMovers() {
+  for (const e of activeEntries()) {
+    if (e.status !== 'waiting' || e.kind !== 'walkin' || !e.pushSub) continue;
+    const ahead = walkInsAheadCuts(e);
+    const prev = e.lastNotifiedAhead;
+    if (prev != null && ahead < prev) {
+      let title, body;
+      if (peopleAhead(e.id) === 0) {
+        title = "🎉 You're next!";
+        body = "You're first in line — head over to Rod da Barber now.";
+      } else if (ahead === 0) {
+        title = 'Almost up! 💈';
+        body = 'No walk-ins ahead — Rod may take a scheduled appointment first, then you.';
+      } else {
+        title = 'You moved up! 💈';
+        body = `Only ${ahead} ahead of you now — start heading over.`;
+      }
+      sendSpotPush(e, title, body);
+    }
+    e.lastNotifiedAhead = ahead;
+  }
+  save();
+}
+
 // ---------------------------------------------------------------------------
 // Eastern-time helpers (DST-safe via Intl)
 // ---------------------------------------------------------------------------
@@ -540,6 +586,8 @@ function makeEntry({ name, phone, partySize, service, kind, apptMin, apptDate, a
     startedAtMs: null,
     finishedAtMs: null,
     addedByBarber: !!addedByBarber,
+    pushSub: null,           // this client's own push subscription (move-up alerts)
+    lastNotifiedAhead: null, // last "walk-ins ahead" count we pushed them
   };
 }
 
@@ -575,6 +623,7 @@ app.post('/api/cancel', (req, res) => {
   e.cancelledByClient = true; // so the barber dashboard can flag it
   save();
   res.json({ ok: true });
+  notifyMovers(); // everyone behind them just moved up
 });
 
 // ---------------------------------------------------------------------------
@@ -652,6 +701,8 @@ app.post('/api/barber/start', checkPin, (req, res) => {
   target.startedAtMs = Date.now();
   save();
   res.json({ ok: true });
+  notifyStarted(target); // buzz the seated client
+  notifyMovers();        // everyone behind moved up
 });
 
 // Finish the current cut (or a specific one)
@@ -669,6 +720,7 @@ app.post('/api/barber/done', checkPin, (req, res) => {
   const breakMsg = doneCuts > 0 && doneCuts % 3 === 0 ? pick(BARBER_BREAK, doneCuts) : null;
 
   res.json({ ok: true, doneCuts, breakMsg });
+  notifyMovers(); // the finished cut cleared — everyone behind moved up
 });
 
 // "Not here" — an appointment/walk-in didn't show; send to no_show
@@ -679,6 +731,7 @@ app.post('/api/barber/noshow', checkPin, (req, res) => {
   target.finishedAtMs = Date.now();
   save();
   res.json({ ok: true });
+  notifyMovers(); // they're out of the line — everyone behind moved up
 });
 
 // Barber removes someone (cancel on their behalf) — works for today's line AND
@@ -691,6 +744,16 @@ app.post('/api/barber/remove', checkPin, (req, res) => {
   target.finishedAtMs = Date.now();
   save();
   res.json({ ok: true });
+  // Buzz the cancelled client (if they opted into push).
+  if (target.kind === 'appt') {
+    const when = target.apptMin != null ? ' (' + apptWhenStr(target) + ')' : '';
+    sendSpotPush(target, '📅 Appointment cancelled',
+      `Rod had to cancel your appointment${when}. Tap to book a new time.`, '/');
+  } else {
+    sendSpotPush(target, 'Taken out of the line',
+      'Rod removed you from the line. Tap to rejoin if this was a mistake.', '/');
+  }
+  notifyMovers(); // removed from the line — everyone behind moved up
 });
 
 // Open / close for the day
@@ -714,6 +777,20 @@ app.post('/api/push/subscribe', (req, res) => {
     db.pushSubs.push(sub);
     save();
   }
+  res.json({ ok: true });
+});
+
+// A waiting client attaches a push subscription to their own spot, so we can
+// buzz them as they move up. We baseline their current position so they only
+// get pushes for FUTURE moves, not one the moment they subscribe.
+app.post('/api/status/subscribe', (req, res) => {
+  const { id, subscription } = req.body || {};
+  const e = db.entries.find((x) => x.id === id);
+  if (!e) return res.status(404).json({ error: 'not_found' });
+  if (!subscription || !subscription.endpoint) return res.status(400).json({ error: 'bad_subscription' });
+  e.pushSub = subscription;
+  e.lastNotifiedAhead = e.kind === 'walkin' ? walkInsAheadCuts(e) : null;
+  save();
   res.json({ ok: true });
 });
 

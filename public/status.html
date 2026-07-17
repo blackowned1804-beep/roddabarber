@@ -43,6 +43,7 @@
       </div>
       <div id="info" class="small muted" style="margin:8px 0"></div>
       <img class="motiv" id="posImg" alt="A little motivation for your day" />
+      <button class="btn secondary" id="moveAlertsBtn" style="display:none;margin-bottom:10px">🔔 Notify me about my spot</button>
       <button class="btn danger" id="cancelBtn">Cancel my spot</button>
     </div>
 
@@ -135,6 +136,63 @@ $('cancelBtn').onclick = async () => {
   refresh();
 };
 
+// --- "Buzz me as I move up" push opt-in for this spot ---
+function markSpotOn(btn) {
+  btn.style.display = 'block';
+  btn.disabled = true;
+  btn.classList.remove('secondary'); btn.classList.add('green');
+  btn.textContent = "🔔 Alerts on — we'll notify you about your spot";
+}
+async function linkSpot(sub) {
+  const r = await fetch('/api/status/subscribe', {
+    method: 'POST', headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ id, subscription: sub }),
+  });
+  if (!r.ok) throw new Error('subscribe failed');
+  localStorage.setItem('charrod_spot_alerts', id);
+}
+async function initSpotAlerts() {
+  const btn = $('moveAlertsBtn');
+  if (!btn || !id) return;
+  if (!('serviceWorker' in navigator) || !('PushManager' in window) || !('Notification' in window)) return;
+  if (Notification.permission === 'denied') {
+    btn.style.display = 'block'; btn.disabled = true;
+    btn.textContent = '🔔 Alerts blocked — enable in phone settings';
+    return;
+  }
+  // Already granted notifications (e.g. the "Rod is open" alert)? Link this spot
+  // silently so they get move-up buzzes with no extra tap.
+  if (Notification.permission === 'granted') {
+    try {
+      const reg = await navigator.serviceWorker.ready;
+      const key = await fetch('/api/push/key').then(r => r.text());
+      let sub = await reg.pushManager.getSubscription();
+      if (!sub && key) sub = await reg.pushManager.subscribe({ userVisibleOnly: true, applicationServerKey: urlBase64ToUint8Array(key) });
+      if (sub) { await linkSpot(sub); markSpotOn(btn); return; }
+    } catch (_) { /* fall through to the manual button */ }
+  }
+  btn.style.display = 'block';
+  btn.onclick = async () => {
+    btn.disabled = true; btn.textContent = 'Setting up…';
+    try {
+      const perm = await Notification.requestPermission();
+      if (perm !== 'granted') { btn.disabled = false; btn.textContent = '🔔 Notify me about my spot'; return; }
+      const reg = await navigator.serviceWorker.ready;
+      const key = await fetch('/api/push/key').then(r => r.text());
+      if (!key) throw new Error('no key');
+      let sub = await reg.pushManager.getSubscription();
+      if (!sub) sub = await reg.pushManager.subscribe({ userVisibleOnly: true, applicationServerKey: urlBase64ToUint8Array(key) });
+      await linkSpot(sub);
+      markSpotOn(btn);
+      toast("Done! We'll notify you about your spot 🔔", 'good');
+    } catch (e) {
+      btn.disabled = false; btn.textContent = '🔔 Notify me about my spot';
+      toast("Couldn't turn on alerts. On iPhone, add this app to your home screen first.", 'bad');
+    }
+  };
+}
+
+initSpotAlerts();
 refresh();
 setInterval(refresh, 5000);
 document.addEventListener('visibilitychange', () => { if (!document.hidden) refresh(); });

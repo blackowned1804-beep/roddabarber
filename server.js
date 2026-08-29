@@ -906,14 +906,21 @@ app.get('/qr', (_req, res) => res.sendFile(path.join(__dirname, 'public', 'qr.ht
   });
 })();
 
-// Keep-warm self-ping: on Render, hit our own public URL every 10 min so the
-// free instance never spins down (no cold starts, no external service needed).
-// Render provides RENDER_EXTERNAL_URL automatically; locally this is unset so
-// the pinger stays off.
+// Keep-warm self-ping — BUSINESS HOURS ONLY, to conserve Render's free
+// 750-instance-hours/month budget. We only ping (and thus stay awake) between
+// WARM_FROM and WARM_TO (ET). Outside that window the free instance spins down
+// after ~15 min idle and consumes no hours. This drops Rod from ~24 h/day to
+// ~11 h/day. Trade-off: the first visit after the off-window is a ~30-50s cold
+// start. Window is env-tunable without touching code.
 const SELF_URL = process.env.RENDER_EXTERNAL_URL;
+const WARM_FROM = parseInt(process.env.WARM_FROM_HOUR || '12', 10); // noon ET (inclusive)
+const WARM_TO = parseInt(process.env.WARM_TO_HOUR || '23', 10);     // 11 PM ET (exclusive)
 if (SELF_URL) {
   setInterval(() => {
-    fetch(`${SELF_URL}/healthz`).catch(() => {});
+    const h = Math.floor(etMinutesNow() / 60);          // current hour, ET
+    if (h >= WARM_FROM && h < WARM_TO) {
+      fetch(`${SELF_URL}/healthz`).catch(() => {});
+    }
   }, 10 * 60 * 1000);
-  console.log(`Keep-warm self-ping enabled → ${SELF_URL}/healthz every 10 min`);
+  console.log(`Keep-warm active ${WARM_FROM}:00–${WARM_TO}:00 ET; sleeps otherwise to save free hours`);
 }

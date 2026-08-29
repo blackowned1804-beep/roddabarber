@@ -139,7 +139,7 @@ function refreshOpenState() {
   }).catch(() => {});
 }
 refreshOpenState();
-document.addEventListener('visibilitychange', () => { if (!document.hidden) refreshOpenState(); });
+document.addEventListener('visibilitychange', () => { if (!document.hidden && withinWarmHours()) refreshOpenState(); });
 
 $('minus').onclick = () => { party = Math.max(1, party - 1); $('party').textContent = party; };
 $('plus').onclick  = () => { party = Math.min(10, party + 1); $('party').textContent = party; };

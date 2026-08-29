@@ -194,8 +194,10 @@ async function initSpotAlerts() {
 
 initSpotAlerts();
 refresh();
-setInterval(refresh, 5000);
-document.addEventListener('visibilitychange', () => { if (!document.hidden) refresh(); });
+// Poll only during business hours so a forgotten open tab makes no overnight
+// requests (keeps the free Render instance asleep — see withinWarmHours).
+setInterval(() => { if (withinWarmHours()) refresh(); }, 5000);
+document.addEventListener('visibilitychange', () => { if (!document.hidden && withinWarmHours()) refresh(); });
 </script>
 </body>
 </html>

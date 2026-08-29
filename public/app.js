@@ -113,6 +113,17 @@ function _playTones(freqs, step, vol, type) {
   } catch (e) {}
 }
 
+// Business-hours gate for auto-refresh polling. Outside this window the pages
+// stop polling so an open/forgotten tab makes NO requests overnight and Render's
+// free instance can spin down (saves the shared 750-hr/month budget). Keep the
+// hours in sync with the server's WARM_FROM/WARM_TO (default noon–11 PM ET).
+function withinWarmHours() {
+  try {
+    const h = parseInt(new Intl.DateTimeFormat('en-US', { timeZone: 'America/New_York', hour: '2-digit', hour12: false }).format(new Date()), 10) % 24;
+    return h >= 12 && h < 23;
+  } catch (e) { return true; } // never break the app if the check fails
+}
+
 // Gentle single chirp — used on the customer live-spot page.
 function beep() { _playTones([660], 0.35, 0.2, 'sine'); }
 

@@ -149,7 +149,9 @@ function start() {
   $('gate').style.display = 'none';
   $('dash').style.display = 'block';
   refresh();
-  setInterval(refresh, 4000);
+  // Auto-refresh only during business hours so a left-open tab doesn't keep the
+  // free Render instance awake overnight (see withinWarmHours in app.js).
+  setInterval(() => { if (withinWarmHours()) refresh(); }, 4000);
   setInterval(() => $('clock').textContent = new Date().toLocaleTimeString('en-US', { timeZone:'America/New_York', hour:'numeric', minute:'2-digit' }) + ' ET', 1000);
   initBarberAlerts();
 }

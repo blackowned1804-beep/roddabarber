@@ -187,10 +187,11 @@ async function sendBarberPush(title, body) {
 // Confirm / Cancel buttons. A per-reminder token lets the buttons act without
 // exposing the PIN. Fires only while the server is awake (business hours) — an
 // appointment comfortably inside open hours reminds fine.
-async function sendApptReminder(entry) {
+async function sendApptReminder(entry, mins) {
   if (!pushReady || !db.barberSubs.length) return;
+  const title = mins <= 10 ? `⏰ ${mins} min away — still unconfirmed` : `⏰ Appointment in ${mins} min`;
   const payload = JSON.stringify({
-    title: '⏰ Appointment in 30 min',
+    title,
     body: `${entry.name} · ${SERVICES[entry.service] || entry.service} · ${minToLabel(entry.apptMin)}`,
     url: '/barber',
     requireInteraction: true,
@@ -218,15 +219,25 @@ function checkApptReminders() {
   const nowMin = etMinutesNow();
   let changed = false;
   for (const e of db.entries) {
-    if (e.kind !== 'appt' || e.status !== 'waiting' || e.reminded) continue;
+    // Skip if not a live appt, or Rod already acted (confirmed here; cancel flips status).
+    if (e.kind !== 'appt' || e.status !== 'waiting' || e.apptConfirmed) continue;
     if (e.apptDate !== today || e.apptMin == null) continue;
     const mins = e.apptMin - nowMin;
-    if (mins >= 0 && mins <= 30) {
+    if (mins < 0) continue; // already started
+    if (!e.reminded && mins <= 30) {
+      // First reminder at ~30 min out
       e.reminded = true;
       e.reminderToken = crypto.randomBytes(8).toString('hex');
       changed = true;
       console.log(`30-min reminder → ${e.name} at ${minToLabel(e.apptMin)}`);
-      sendApptReminder(e);
+      sendApptReminder(e, 30);
+    } else if (e.reminded && !e.reminded10 && mins <= 10) {
+      // Repeat once at ~10 min out — only if he still hasn't confirmed/cancelled.
+      e.reminded10 = true;
+      if (!e.reminderToken) e.reminderToken = crypto.randomBytes(8).toString('hex'); // keep a valid action token
+      changed = true;
+      console.log(`10-min reminder → ${e.name} at ${minToLabel(e.apptMin)}`);
+      sendApptReminder(e, 10);
     }
   }
   if (changed) save();

@@ -17,19 +17,43 @@ self.addEventListener('push', (e) => {
     body: data.body,
     icon: '/img/icon-192.png',
     badge: '/img/icon-192.png',
-    data: { url: data.url || '/' },
+    data: { url: data.url || '/', apptId: data.apptId, apptToken: data.apptToken },
     requireInteraction: !!data.requireInteraction,
     renotify: !!data.renotify,
   };
   if (data.tag) opts.tag = data.tag;
   if (data.vibrate) opts.vibrate = data.vibrate;
+  if (data.actions) opts.actions = data.actions; // Confirm / Cancel buttons
   e.waitUntil(self.registration.showNotification(data.title, opts));
 });
 
-// Tapping the notification opens (or focuses) the app.
+// Tapping the notification (or a Confirm/Cancel button) is handled here.
 self.addEventListener('notificationclick', (e) => {
+  const d = e.notification.data || {};
   e.notification.close();
-  const url = (e.notification.data && e.notification.data.url) || '/';
+
+  // Appointment reminder action buttons — confirm/cancel without opening the app.
+  if (e.action === 'confirm-appt' || e.action === 'cancel-appt') {
+    const action = e.action === 'confirm-appt' ? 'confirm' : 'cancel';
+    e.waitUntil((async () => {
+      let ok = false;
+      try {
+        const r = await fetch('/api/appt/act', {
+          method: 'POST', headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ id: d.apptId, token: d.apptToken, action }),
+        });
+        ok = r.ok;
+      } catch (_) {}
+      await self.registration.showNotification(
+        ok ? (action === 'confirm' ? '✅ Appointment confirmed' : '✕ Appointment cancelled') : 'Could not update',
+        { body: ok ? 'Done.' : 'Open the app to try again.', icon: '/img/icon-192.png', badge: '/img/icon-192.png', tag: 'appt-result', data: { url: '/barber' } }
+      );
+    })());
+    return;
+  }
+
+  // Plain tap → open/focus the app.
+  const url = d.url || '/';
   e.waitUntil((async () => {
     const all = await self.clients.matchAll({ type: 'window', includeUncontrolled: true });
     for (const c of all) { if ('focus' in c) return c.focus(); }

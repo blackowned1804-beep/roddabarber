@@ -181,6 +181,58 @@ async function sendBarberPush(title, body) {
   }
 }
 
+// --- 30-minutes-before appointment reminders (Confirm / Cancel) --------------
+// Every minute (while the instance is awake), find appointments starting within
+// the next 30 min that haven't been reminded, and push Rod a notification with
+// Confirm / Cancel buttons. A per-reminder token lets the buttons act without
+// exposing the PIN. Fires only while the server is awake (business hours) — an
+// appointment comfortably inside open hours reminds fine.
+async function sendApptReminder(entry) {
+  if (!pushReady || !db.barberSubs.length) return;
+  const payload = JSON.stringify({
+    title: '⏰ Appointment in 30 min',
+    body: `${entry.name} · ${SERVICES[entry.service] || entry.service} · ${minToLabel(entry.apptMin)}`,
+    url: '/barber',
+    requireInteraction: true,
+    vibrate: [300, 120, 300, 120, 300],
+    tag: 'appt-' + entry.id,
+    renotify: true,
+    apptId: entry.id,
+    apptToken: entry.reminderToken,
+    actions: [
+      { action: 'confirm-appt', title: '✓ Confirm' },
+      { action: 'cancel-appt', title: '✕ Cancel' },
+    ],
+  });
+  const dead = [];
+  await Promise.all(db.barberSubs.map(async (sub) => {
+    try { await webpush.sendNotification(sub, payload); }
+    catch (e) { if (e.statusCode === 404 || e.statusCode === 410) dead.push(sub.endpoint); }
+  }));
+  if (dead.length) { db.barberSubs = db.barberSubs.filter((s) => !dead.includes(s.endpoint)); save(); }
+}
+
+function checkApptReminders() {
+  if (!pushReady || !db.barberSubs.length) return;
+  const today = etDateStr();
+  const nowMin = etMinutesNow();
+  let changed = false;
+  for (const e of db.entries) {
+    if (e.kind !== 'appt' || e.status !== 'waiting' || e.reminded) continue;
+    if (e.apptDate !== today || e.apptMin == null) continue;
+    const mins = e.apptMin - nowMin;
+    if (mins >= 0 && mins <= 30) {
+      e.reminded = true;
+      e.reminderToken = crypto.randomBytes(8).toString('hex');
+      changed = true;
+      console.log(`30-min reminder → ${e.name} at ${minToLabel(e.apptMin)}`);
+      sendApptReminder(e);
+    }
+  }
+  if (changed) save();
+}
+setInterval(checkApptReminders, 60 * 1000);
+
 // "Stay healthy, Rod" tips — one fires to Rod each time he opens the shop.
 // Kept in order and rotated via db.healthTipIdx so he sees a different one
 // every open and the cycle survives restarts.
@@ -436,6 +488,7 @@ function publicEntry(e) {
     apptDate: e.apptDate || null,
     apptLabel: e.apptMin != null ? minToLabel(e.apptMin) : null,
     apptDateLabel: e.apptDate ? dateLabel(e.apptDate) : null,
+    apptConfirmed: !!e.apptConfirmed,
     status: e.status,
     createdMin: e.createdMin,
     createdLabel: minToLabel(e.createdMin),
@@ -762,6 +815,30 @@ app.post('/api/barber/remove', checkPin, (req, res) => {
       'Rod removed you from the line. Tap to rejoin if this was a mistake.', '/');
   }
   notifyMovers(); // removed from the line — everyone behind moved up
+});
+
+// Confirm / Cancel an appointment straight from Rod's 30-min reminder notification.
+// Token-gated (not PIN) so the notification's action buttons can act directly.
+app.post('/api/appt/act', (req, res) => {
+  const { id, token, action } = req.body || {};
+  const e = db.entries.find(x => x.id === id);
+  if (!e || e.kind !== 'appt') return res.status(404).json({ error: 'not_found' });
+  if (!token || token !== e.reminderToken) return res.status(403).json({ error: 'bad_token' });
+  e.reminderToken = null; // single use
+  if (action === 'cancel') {
+    e.status = 'cancelled';
+    e.finishedAtMs = Date.now();
+    save();
+    res.json({ ok: true, action: 'cancel' });
+    const when = e.apptMin != null ? ' (' + apptWhenStr(e) + ')' : '';
+    sendSpotPush(e, '📅 Appointment cancelled', `Rod had to cancel your appointment${when}. Tap to book a new time.`, '/');
+    notifyMovers();
+  } else {
+    e.apptConfirmed = true;
+    save();
+    res.json({ ok: true, action: 'confirm' });
+    sendSpotPush(e, '✅ Appointment confirmed', `Rod confirmed your appointment${e.apptMin != null ? ' at ' + minToLabel(e.apptMin) : ''}. See you soon!`);
+  }
 });
 
 // Open / close for the day

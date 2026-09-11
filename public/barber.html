@@ -98,6 +98,17 @@
   </div>
 </div>
 
+<!-- New-request alert (pops full-screen + loud alarm when a client submits) -->
+<div class="modal-host" id="newReqModal">
+  <div class="modal">
+    <div style="font-size:52px">🔔</div>
+    <h3 style="font-size:22px">New request!</h3>
+    <p id="newReqName" style="font-size:24px;font-weight:800;margin:8px 0 2px">—</p>
+    <p class="muted" id="newReqInfo" style="font-size:16px"></p>
+    <button class="btn green" id="newReqOk" style="margin-top:18px">Got it — view the line</button>
+  </div>
+</div>
+
 <!-- Stats modal -->
 <div class="modal-host" id="statsModal">
   <div class="modal" style="text-align:left;max-width:460px">
@@ -247,10 +258,11 @@ async function refresh() {
     <span>${a.serviceLabel}${a.partySize>1?' · '+a.partySize+' cuts':''}</span></div>
     <div class="acts"><button onclick="remove('${a.id}')">✕</button></div></div>`).join('');
 
-  // new-client alert
+  // new-client alert — prominent full-screen modal + loud repeating alarm
   const ids = new Set(q.map(e => e.id));
   if (!firstLoad) {
-    for (const e of q) if (!seenIds.has(e.id)) { toast('New: ' + e.name + ' (' + e.serviceLabel + ')', 'good'); loudAlert(); break; }
+    const fresh = q.find(e => !seenIds.has(e.id));
+    if (fresh) showNewRequest(fresh);
   }
   seenIds = ids;
 
@@ -296,6 +308,18 @@ $('aSave').onclick = async () => {
 
 // Stats modal
 let statData = null, statKey = 'today';
+// Prominent new-request alert: full-screen modal + loud repeating alarm.
+function showNewRequest(e) {
+  let when;
+  if (e.kind === 'appt') when = 'Appointment' + (e.apptDateLabel ? ' · ' + e.apptDateLabel : '') + (e.apptLabel ? ' at ' + e.apptLabel : '');
+  else when = 'Walk-in';
+  $('newReqName').textContent = e.name + (e.partySize > 1 ? ' (+' + (e.partySize - 1) + ')' : '');
+  $('newReqInfo').textContent = e.serviceLabel + ' · ' + when;
+  $('newReqModal').classList.add('show');
+  bigAlarm();
+}
+$('newReqOk').onclick = () => { $('newReqModal').classList.remove('show'); stopAlarm(); };
+
 $('testSoundBtn').onclick = () => { loudAlert(); toast("🔊 That's the new-client alert. If it's quiet, turn your volume up.", 'good'); };
 $('statsBtn').onclick = async () => { statData = await api('/api/barber/stats'); renderStats(); $('statsModal').classList.add('show'); };
 $('statsClose').onclick = () => $('statsModal').classList.remove('show');

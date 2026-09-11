@@ -134,6 +134,22 @@ function loudAlert() {
   _playTones([784, 988, 1319, 784, 988, 1319, 1319], 0.16, 0.85, 'square');
 }
 
+// Big attention alarm — louder + REPEATS several times. Used when a new request
+// comes in on Rod's dashboard so he can't miss it. stopAlarm() silences it early
+// (called when he taps the alert). Each cycle is a piercing rising ring.
+let _alarmTimers = [];
+function stopAlarm() { _alarmTimers.forEach(clearTimeout); _alarmTimers = []; }
+function bigAlarm(cycles) {
+  stopAlarm();
+  const n = cycles || 5;
+  const ring = () => _playTones([880, 1175, 1568, 880, 1175, 1568], 0.15, 0.95, 'square');
+  for (let i = 0; i < n; i++) _alarmTimers.push(setTimeout(ring, i * 1100));
+}
+
+// Error / failure buzzer — descending sawtooth, clearly "something went wrong".
+// Used on the client page when a booking doesn't go through.
+function errorSound() { _playTones([466, 349, 233], 0.24, 0.6, 'sawtooth'); }
+
 // "Notify me when Rod opens" — web push opt-in (only on pages with #openAlertsBtn).
 function urlBase64ToUint8Array(b64) {
   const pad = '='.repeat((4 - b64.length % 4) % 4);

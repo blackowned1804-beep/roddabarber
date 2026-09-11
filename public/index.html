@@ -116,6 +116,16 @@
   </div>
 </div>
 
+<!-- Booking-failed alert (pops + error sound when a request doesn't go through) -->
+<div class="modal-host" id="bookFailModal">
+  <div class="modal">
+    <div style="font-size:48px">⚠️</div>
+    <h3 style="font-size:21px">Couldn't book that</h3>
+    <p class="muted" id="bookFailMsg" style="font-size:16px">Please try a different time.</p>
+    <button class="btn" id="bookFailOk" style="margin-top:16px">Try another time</button>
+  </div>
+</div>
+
 <div class="install-banner" id="installBanner">
   <img src="/img/icon-192.png" alt="" />
   <div class="it" id="installText"></div>
@@ -157,6 +167,14 @@ $('kindSeg').querySelectorAll('button').forEach(b => b.onclick = () => {
 $('apptYes').onclick = () => { $('apptModal').classList.remove('show'); selectKind('appt'); };
 $('apptNo').onclick  = () => { $('apptModal').classList.remove('show'); selectKind('walkin'); toast('No problem — choose Walk-in to join the line.', 'warn'); };
 
+// Prominent booking-failed alert: error sound + modal telling them to try again.
+function showBookFail(msg) {
+  $('bookFailMsg').textContent = msg;
+  $('bookFailModal').classList.add('show');
+  errorSound();
+}
+$('bookFailOk').onclick = () => $('bookFailModal').classList.remove('show');
+
 // Clear any lingering error toast the moment they fix the field it was about.
 function clearToasts() { document.querySelectorAll('#toasts .toast').forEach(t => t.remove()); }
 $('apptTime').addEventListener('input', clearToasts);
@@ -194,7 +212,7 @@ $('submit').onclick = async () => {
   try {
     const r = await fetch('/api/join', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
     const data = await r.json();
-    if (!r.ok) { toast(data.message || 'Could not join', 'bad'); $('submit').disabled = false; return; }
+    if (!r.ok) { showBookFail(data.message || 'Your request could not be completed. Please try a different time.'); $('submit').disabled = false; return; }
     $('formCard').style.display = 'none';
     $('doneCard').style.display = 'block';
     if (data.kind === 'appt') {
@@ -214,7 +232,7 @@ $('submit').onclick = async () => {
     $('statusLink').href = '/status?id=' + data.id;
     localStorage.setItem('charrod_id', data.id);
   } catch (e) {
-    toast('Network error — try again', 'bad');
+    showBookFail('Network error — please check your connection and try again.');
     $('submit').disabled = false;
   }
 };

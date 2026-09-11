@@ -158,7 +158,15 @@ async function sendOpenPush() {
 
 async function sendBarberPush(title, body) {
   if (!pushReady || !db.barberSubs.length) return;
-  const payload = JSON.stringify({ title, body, url: '/barber' });
+  // requireInteraction keeps the notification on Rod's screen until he taps it
+  // (like a window that won't go away); vibrate buzzes his phone hard.
+  const payload = JSON.stringify({
+    title, body, url: '/barber',
+    requireInteraction: true,
+    vibrate: [300, 120, 300, 120, 300],
+    tag: 'new-client',
+    renotify: true,
+  });
   const dead = [];
   await Promise.all(db.barberSubs.map(async (sub) => {
     try {

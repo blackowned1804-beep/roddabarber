@@ -78,6 +78,7 @@
 const $ = id => document.getElementById(id);
 const id = new URLSearchParams(location.search).get('id') || localStorage.getItem('charrod_id');
 let lastAhead = null;
+let lastStatus = null;
 
 function show(which) {
   ['loading','waiting','chair','closed'].forEach(s => $(s).style.display = s === which ? 'block' : 'none');
@@ -98,10 +99,23 @@ async function refresh() {
     if (r.status === 404) { show('closed'); $('closedTitle').textContent = 'Spot not found'; return; }
     const d = await r.json();
     const st = d.entry.status;
+    const prevStatus = lastStatus; lastStatus = st;
 
     if (st === 'in_chair') { show('chair'); if (lastAhead !== 0) beep(); lastAhead = 0; return; }
     if (st === 'done') { show('closed'); $('closedTitle').textContent = 'All done! ✅'; $('closedText').textContent = 'Thanks for coming in — look sharp!'; return; }
-    if (st === 'cancelled') { show('closed'); $('closedTitle').textContent = 'Spot cancelled'; $('closedText').textContent = 'You removed yourself from the line.'; return; }
+    if (st === 'cancelled') {
+      show('closed');
+      if (d.entry.cancelledByClient) {
+        $('closedTitle').textContent = 'Spot cancelled';
+        $('closedText').textContent = 'You removed yourself from the line.';
+      } else {
+        $('closedTitle').textContent = '⚠️ Rod cancelled your appointment';
+        $('closedText').textContent = 'Sorry about that — please book a new time.';
+        // Very loud alert if it just happened while they're on this page.
+        if (prevStatus && prevStatus !== 'cancelled') { toast('Rod cancelled your appointment', 'bad'); bigAlarm(); }
+      }
+      return;
+    }
     if (st === 'no_show') { show('closed'); $('closedTitle').textContent = 'Marked as a no-show'; $('closedText').textContent = 'Looks like you missed your turn. Come back any time!'; return; }
 
     // waiting

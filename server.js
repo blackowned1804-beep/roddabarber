@@ -213,28 +213,57 @@ async function sendApptReminder(entry, mins) {
   if (dead.length) { db.barberSubs = db.barberSubs.filter((s) => !dead.includes(s.endpoint)); save(); }
 }
 
+// "It's time now" ping to Rod at the appointment's start (no action buttons).
+async function sendApptNow(entry) {
+  if (!pushReady || !db.barberSubs.length) return;
+  const payload = JSON.stringify({
+    title: `🔔 ${entry.name}'s appointment is now`,
+    body: `${SERVICES[entry.service] || entry.service} · ${minToLabel(entry.apptMin)}`,
+    url: '/barber',
+    requireInteraction: true,
+    vibrate: [400, 150, 400, 150, 400],
+    tag: 'appt-' + entry.id,
+    renotify: true,
+  });
+  const dead = [];
+  await Promise.all(db.barberSubs.map(async (sub) => {
+    try { await webpush.sendNotification(sub, payload); }
+    catch (e) { if (e.statusCode === 404 || e.statusCode === 410) dead.push(sub.endpoint); }
+  }));
+  if (dead.length) { db.barberSubs = db.barberSubs.filter((s) => !dead.includes(s.endpoint)); save(); }
+}
+
 function checkApptReminders() {
   if (!pushReady || !db.barberSubs.length) return;
   const today = etDateStr();
   const nowMin = etMinutesNow();
   let changed = false;
   for (const e of db.entries) {
-    // Skip if not a live appt, or Rod already acted (confirmed here; cancel flips status).
-    if (e.kind !== 'appt' || e.status !== 'waiting' || e.apptConfirmed) continue;
+    if (e.kind !== 'appt' || e.status !== 'waiting') continue; // cancelled/started flip status
     if (e.apptDate !== today || e.apptMin == null) continue;
     const mins = e.apptMin - nowMin;
-    if (mins < 0) continue; // already started
+
+    // "It's now" ping at 0 min — fires once, for confirmed OR not, within a short
+    // window so a late server wake-up doesn't send a stale ping.
+    if (!e.remindedNow && mins <= 0 && mins >= -10) {
+      e.remindedNow = true;
+      changed = true;
+      console.log(`NOW ping → ${e.name} at ${minToLabel(e.apptMin)}`);
+      sendApptNow(e);
+      continue;
+    }
+
+    // Confirm/Cancel reminders — only while still unconfirmed and before the time.
+    if (e.apptConfirmed || mins < 0) continue;
     if (!e.reminded && mins <= 30) {
-      // First reminder at ~30 min out
       e.reminded = true;
       e.reminderToken = crypto.randomBytes(8).toString('hex');
       changed = true;
       console.log(`30-min reminder → ${e.name} at ${minToLabel(e.apptMin)}`);
       sendApptReminder(e, 30);
     } else if (e.reminded && !e.reminded10 && mins <= 10) {
-      // Repeat once at ~10 min out — only if he still hasn't confirmed/cancelled.
       e.reminded10 = true;
-      if (!e.reminderToken) e.reminderToken = crypto.randomBytes(8).toString('hex'); // keep a valid action token
+      if (!e.reminderToken) e.reminderToken = crypto.randomBytes(8).toString('hex');
       changed = true;
       console.log(`10-min reminder → ${e.name} at ${minToLabel(e.apptMin)}`);
       sendApptReminder(e, 10);
@@ -293,9 +322,9 @@ async function sendHealthTipPush() {
 // Each waiting client can attach their own push subscription to their entry, so
 // we can buzz just them when their position improves. entry.lastNotifiedAhead
 // records the last count we told them, so we only push on an actual decrease.
-async function sendSpotPush(entry, title, body, url) {
+async function sendSpotPush(entry, title, body, url, opts) {
   if (!pushReady || !entry || !entry.pushSub) return;
-  const payload = JSON.stringify({ title, body, url: url || ('/status?id=' + entry.id) });
+  const payload = JSON.stringify(Object.assign({ title, body, url: url || ('/status?id=' + entry.id) }, opts || {}));
   try {
     await webpush.sendNotification(entry.pushSub, payload);
   } catch (e) {
@@ -500,6 +529,7 @@ function publicEntry(e) {
     apptLabel: e.apptMin != null ? minToLabel(e.apptMin) : null,
     apptDateLabel: e.apptDate ? dateLabel(e.apptDate) : null,
     apptConfirmed: !!e.apptConfirmed,
+    cancelledByClient: !!e.cancelledByClient,
     status: e.status,
     createdMin: e.createdMin,
     createdLabel: minToLabel(e.createdMin),
@@ -819,8 +849,9 @@ app.post('/api/barber/remove', checkPin, (req, res) => {
   // Buzz the cancelled client (if they opted into push).
   if (target.kind === 'appt') {
     const when = target.apptMin != null ? ' (' + apptWhenStr(target) + ')' : '';
-    sendSpotPush(target, '📅 Appointment cancelled',
-      `Rod had to cancel your appointment${when}. Tap to book a new time.`, '/');
+    sendSpotPush(target, '⚠️ Your appointment was cancelled',
+      `Rod had to cancel your appointment${when}. Please tap to book a new time.`, '/',
+      { requireInteraction: true, vibrate: [500, 200, 500, 200, 500, 200, 700], tag: 'appt-cancel', renotify: true });
   } else {
     sendSpotPush(target, 'Taken out of the line',
       'Rod removed you from the line. Tap to rejoin if this was a mistake.', '/');
@@ -842,7 +873,8 @@ app.post('/api/appt/act', (req, res) => {
     save();
     res.json({ ok: true, action: 'cancel' });
     const when = e.apptMin != null ? ' (' + apptWhenStr(e) + ')' : '';
-    sendSpotPush(e, '📅 Appointment cancelled', `Rod had to cancel your appointment${when}. Tap to book a new time.`, '/');
+    sendSpotPush(e, '⚠️ Your appointment was cancelled', `Rod had to cancel your appointment${when}. Please tap to book a new time.`, '/',
+      { requireInteraction: true, vibrate: [500, 200, 500, 200, 500, 200, 700], tag: 'appt-cancel', renotify: true });
     notifyMovers();
   } else {
     e.apptConfirmed = true;
